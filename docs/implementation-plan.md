@@ -1,17 +1,17 @@
-﻿# Implementation Plan
+# Implementation Plan
 
-This plan should be followed when implementing icarun from the current greenfield state.
+This plan should be followed when implementing icarun with Convex.
 
 ## Principles
 
 - Use pnpm for all commands.
-- Use Drizzle ORM and drizzle-kit, not Prisma.
-- Keep secrets server-side.
-- Preserve Railway deployability at every phase.
-- Keep Expo Web as an SPA using `web.output: 'single'`.
-- Validate all API inputs with Zod.
+- Use Convex for persistence and backend functions.
+- Do not use PostgreSQL, Drizzle ORM, drizzle-kit, Prisma, or Express unless explicitly requested.
+- Keep secrets server-side in Convex deployment environment variables.
+- Preserve Expo Web as an SPA using `web.output: 'single'`.
+- Validate Convex function arguments with `convex/values` validators.
 - Validate all AI outputs with Zod.
-- AI operations must use preview → confirmation → execute.
+- AI operations must use preview -> confirmation -> execute.
 
 ## Phase 1 — Workspace Foundation
 
@@ -20,13 +20,12 @@ Create the monorepo foundation:
 ```txt
 pnpm-workspace.yaml
 apps/mobile/
-apps/server/
 ```
 
 Root package goals:
 
 - private workspace root
-- pnpm scripts for build/start/typecheck
+- pnpm scripts for build/typecheck/Convex
 - no npm/yarn commands
 
 Recommended root scripts:
@@ -34,77 +33,17 @@ Recommended root scripts:
 ```json
 {
   "scripts": {
-    "dev": "pnpm --parallel --filter @icarun/server --filter @icarun/mobile dev",
-    "dev:server": "pnpm --filter @icarun/server dev",
-    "dev:mobile": "pnpm --filter @icarun/mobile dev",
-    "build": "pnpm --filter @icarun/mobile build:web && pnpm --filter @icarun/server build",
-    "start": "pnpm --filter @icarun/server start",
+    "dev": "pnpm --filter @icarun/mobile dev",
+    "dev:web": "pnpm --filter @icarun/mobile web",
+    "convex:dev": "pnpm --filter @icarun/mobile convex:dev",
+    "convex:deploy": "pnpm --filter @icarun/mobile convex:deploy",
+    "build": "pnpm --filter @icarun/mobile build",
     "typecheck": "pnpm -r typecheck"
   }
 }
 ```
 
-## Phase 2 — Express Server Skeleton
-
-Create `apps/server` with:
-
-- TypeScript
-- Express
-- Zod
-- `/api/health`
-- consistent JSON error shape
-- environment validation
-- CORS allowlist
-
-Server must listen with:
-
-```ts
-const port = Number(process.env.PORT) || 3000
-app.listen(port, '0.0.0.0')
-```
-
-## Phase 3 — Drizzle and PostgreSQL
-
-Add:
-
-- `drizzle-orm`
-- `drizzle-kit`
-- `postgres` or another Drizzle-compatible PostgreSQL driver
-- `apps/server/drizzle.config.ts`
-- `apps/server/src/db.ts`
-- `apps/server/src/schema/*`
-
-Initial tables:
-
-- `tasks`
-- `ai_operation_logs`
-
-Generate migrations using drizzle-kit.
-
-Do not use `db:push` in production.
-
-## Phase 4 — Task CRUD API
-
-Implement:
-
-```txt
-GET    /api/tasks
-GET    /api/tasks/:id
-POST   /api/tasks
-PATCH  /api/tasks/:id
-DELETE /api/tasks/:id
-```
-
-Add Zod schemas for:
-
-- create task body
-- update task body
-- route params
-- task list filters
-
-Protect mutation endpoints with bearer auth if `APP_ACCESS_TOKEN` is configured.
-
-## Phase 5 — Expo App
+## Phase 2 — Expo App
 
 Create `apps/mobile` using Expo + TypeScript.
 
@@ -112,8 +51,9 @@ Use:
 
 - Expo Router
 - React Native Web
-- React Query
-- `#/*` path alias
+- Convex React client
+- `#/*` path alias for `src`
+- `@/*` path alias for app root/Convex generated imports
 
 Initial routes:
 
@@ -132,61 +72,79 @@ web: {
 }
 ```
 
-## Phase 6 — Web/API Integration
+## Phase 3 — Convex Backend Foundation
 
-Create API client:
+Add:
 
-```txt
-apps/mobile/src/lib/api.ts
+- `convex`
+- `apps/mobile/convex.json`
+- `apps/mobile/convex/schema.ts`
+- `apps/mobile/convex/health.ts`
+
+Run:
+
+```bash
+pnpm --filter @icarun/mobile convex:dev
 ```
 
-Use only:
+This creates a deployment, writes `EXPO_PUBLIC_CONVEX_URL`, and generates `convex/_generated`.
+
+## Phase 4 — Task CRUD Functions
+
+Implement:
+
+```txt
+api.tasks.list
+api.tasks.get
+api.tasks.create
+api.tasks.update
+api.tasks.remove
+```
+
+Use Convex `v` validators for arguments.
+
+## Phase 5 — Web/Convex Integration
+
+Create Convex client:
+
+```txt
+apps/mobile/src/lib/convex.ts
+```
+
+Wrap the app with `ConvexProvider`.
+
+Use:
 
 ```env
-EXPO_PUBLIC_API_BASE_URL
+EXPO_PUBLIC_CONVEX_URL
 ```
 
 Never reference server secrets in client code.
 
-Add React Query hooks:
+## Phase 6 — Task UI
 
-- `useTasks`
-- `useTask`
-- `useCreateTask`
-- `useUpdateTask`
-- `useDeleteTask`
+Implement:
 
-## Phase 7 — Static Serving and SPA Fallback
+- task list
+- status filters
+- task creation
+- task detail
+- edit task
+- complete task
+- delete task
+- settings health display
 
-Expo Web build output:
+## Phase 7 — OpenAI-Compatible Action
 
-```txt
-apps/server/web-build
-```
-
-Recommended mobile script:
-
-```json
-{
-  "build:web": "expo export --platform web --output-dir ../server/web-build"
-}
-```
-
-Express route order:
-
-1. API routes
-2. static assets
-3. SPA fallback to `index.html`
-
-## Phase 8 — OpenAI-Compatible Client
-
-Create server-side client:
+Create backend helpers:
 
 ```txt
-apps/server/src/services/openaiClient.ts
+apps/mobile/convex/lib/openai.ts
+apps/mobile/convex/lib/prompt.ts
+apps/mobile/convex/lib/aiSchemas.ts
 ```
 
-Use env:
+Use Convex env:
 
 ```env
 OPENAI_API_KEY
@@ -207,30 +165,30 @@ Default request:
 
 If provider rejects `response_format`, retry without it when appropriate.
 
-## Phase 9 — AI Preview Endpoint
+## Phase 8 — AI Preview Action
 
 Implement:
 
 ```txt
-POST /api/ai/commands/preview
+api.ai.preview
 ```
 
 Responsibilities:
 
-- validate request body
+- validate request args
 - load relevant current tasks if needed
-- call OpenAI-compatible API
+- call OpenAI-compatible API from Convex action
 - parse JSON
 - validate AI actions with Zod
 - return proposed actions
-- never mutate DB
+- never mutate tasks
 
-## Phase 10 — AI Execute Endpoint
+## Phase 9 — AI Execute Action
 
 Implement:
 
 ```txt
-POST /api/ai/commands/execute
+api.ai.execute
 ```
 
 Responsibilities:
@@ -238,10 +196,10 @@ Responsibilities:
 - validate submitted actions
 - verify task IDs exist for update/delete
 - require confirmation for delete and bulk actions
-- execute allowed operations only
+- execute allowed operations only through task mutations
 - log operation result
 
-## Phase 11 — AI Command UI
+## Phase 10 — AI Command UI
 
 Frontend flow:
 
@@ -251,65 +209,44 @@ User input
   -> show proposed changes
   -> confirm/cancel
   -> execute
-  -> invalidate/refetch tasks
+  -> Convex realtime query updates UI
 ```
 
 Never execute AI output immediately from preview.
 
-## Phase 12 — Auth and Rate Limiting
+## Phase 11 — Deployment
 
-Add simple bearer auth for:
-
-- task mutations
-- AI endpoints
-
-Add rate limiting for:
-
-- AI preview
-- AI execute
-
-## Phase 13 — Railway Deployment
-
-Add:
-
-```txt
-railway.json
-```
-
-Expected lifecycle:
+Deploy Convex backend and build the frontend:
 
 ```bash
-pnpm build
-pnpm --filter @icarun/server db:migrate
-pnpm start
+pnpm --filter @icarun/mobile convex:deploy
 ```
 
-Configure Railway variables:
+Static build output:
 
-- `DATABASE_URL`
-- `OPENAI_API_KEY`
-- `OPENAI_BASE_URL`
-- `OPENAI_MODEL`
-- `APP_ACCESS_TOKEN`
-- `NODE_ENV=production`
+```txt
+apps/mobile/dist
+```
 
-## Phase 14 — Verification
+Host the output on an SPA-compatible static host.
+
+## Phase 12 — Verification
 
 Run when possible:
 
 ```bash
 pnpm install
+pnpm --filter @icarun/mobile convex:dev
 pnpm typecheck
 pnpm build
-pnpm start
 ```
 
 Verify:
 
-- `/api/health`
-- task CRUD
+- `api.health.check` works
+- task CRUD works
 - Expo Web app loads
-- `/tasks/:id` refresh works
+- `/tasks/:id` refresh works on deployed static host
 - AI preview rejects invalid output
 - AI execute requires confirmation
-- secrets are not in frontend bundle
+- OpenAI key stays server-side

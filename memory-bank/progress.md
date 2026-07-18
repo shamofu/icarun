@@ -2,44 +2,64 @@
 
 ## Done
 
-- Project direction defined.
-- Drizzle chosen over Prisma.
-- Expo / React Native Web architecture selected.
-- Express API architecture selected.
-- PostgreSQL selected.
-- Railway selected as primary PaaS target.
-- OpenAI-compatible API integration design selected.
-- Preview-confirm-execute AI safety model selected.
-- Cline project memory structure drafted.
+- Project direction updated to Convex.
+- ADR 0002 added and ADR 0001 superseded.
+- pnpm workspace created.
+- Expo / React Native Web app skeleton created.
+- Convex dependency added.
+- Local Convex deployment configured during validation.
+- Convex generated files created.
+- Convex schema added.
+- `tasks` table added.
+- `aiOperationLogs` table added.
+- Health query added.
+- Task CRUD queries/mutations added.
+- AI preview action added.
+- AI execute action added.
+- Zod AI validation added.
+- OpenAI-compatible client helper added.
+- AI command UI added.
+- Task list screen added.
+- Task detail screen added.
+- Settings screen added.
+- `.env.example` updated for Convex.
+- README updated for Convex.
+- docs updated for Convex.
+- project rules updated for Convex.
+- TypeScript typecheck has passed once (`tsc --noEmit`).
+- Convex functions have compiled and become ready against local deployment once.
+- Basic Convex function runtime checks performed (`health.check`, task create/list/remove, AI confirmation guard).
+- Mobile dependencies updated to Expo SDK 57-compatible versions.
+- Updated dependency set passes Expo dependency check, peer dependency check, TypeScript typecheck, and Expo Web build.
 
-## Not Started
+## Not Started / Remaining
 
-- pnpm workspace setup
-- Expo app setup
-- Express server setup
-- Drizzle installation
-- drizzle-kit configuration
-- database schema
-- migrations
-- task CRUD API
-- task UI
-- AI preview endpoint
-- AI execute endpoint
-- AI command UI
-- auth
-- rate limiting
-- Railway deployment
-- local verification
+- Real production Convex deployment setup.
+- Production OpenAI-compatible env var configuration.
+- Static SPA host selection and deployment.
+- Full browser UI smoke test after Expo SDK 57 dependency update.
+- Real AI preview call with a configured `OPENAI_API_KEY`.
+- Authentication.
+- Rate limiting / quotas.
 
 ## Known Risks
 
-### Drizzle config version differences
+### Convex local deployment artifacts
 
-drizzle-kit config syntax may vary by version.
+Local Convex runtime state is generated under `apps/mobile/.convex/` and must not be committed.
 
 Mitigation:
 
-- check installed drizzle-kit docs/version before final implementation
+- ignore `apps/*/.convex/`
+
+### Convex generated files
+
+`apps/mobile/convex/_generated/` is required for typechecking.
+
+Mitigation:
+
+- commit generated files
+- regenerate with `pnpm --filter @icarun/mobile convex:dev`
 
 ### OpenAI-compatible provider differences
 
@@ -55,53 +75,32 @@ Some providers may not support:
 
 Mitigation:
 
-- support fallback retry without `response_format`
+- retry without `response_format`
 - always parse JSON
 - always validate with Zod
 
-### Expo monorepo complexity
+### Expo dynamic route refresh
 
-Expo + Metro can have issues with workspace packages.
-
-Mitigation:
-
-- avoid `packages/shared` at first
-- duplicate small types initially
-- add Metro config only when necessary
-
-### Railway monorepo detection
-
-Railway may not infer the intended build/start commands.
-
-Mitigation:
-
-- provide `railway.json`
-- explicitly set build command
-- explicitly set pre-deploy migration command
-- explicitly set start command
-
-### Dynamic route 404s
-
-Static web export may break `/tasks/[id]` refresh.
+Static hosting may break `/tasks/[id]` refresh if no SPA fallback is configured.
 
 Mitigation:
 
 - use `web.output: 'single'`
-- add Express SPA fallback
+- configure host index.html fallback
 
 ## MVP Completion Checklist
 
 The MVP is complete when:
 
 - `pnpm install` succeeds
+- `pnpm typecheck` succeeds
 - `pnpm build` succeeds
-- `pnpm start` starts the server
-- `/api/health` works
+- Convex functions are deployed
+- `api.health.check` works
 - task CRUD works
 - Expo Web UI can list/create/update/delete tasks
-- AI preview works
+- AI preview works with configured provider key
 - AI execute works after confirmation
 - OpenAI key stays server-side
-- Drizzle migrations run in deployment
-- Railway deploy succeeds
+- static SPA deploy succeeds
 - `/tasks/:id` works after browser refresh

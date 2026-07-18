@@ -1,51 +1,27 @@
-﻿# API Contract
+# Convex Function Contract
 
-This document defines the initial icarun HTTP API contract.
+This document defines the initial icarun backend contract.
+
+The previous HTTP REST API contract has been replaced by Convex functions.
 
 ## General Rules
 
-- All API routes are prefixed with `/api`.
-- Request and response bodies are JSON.
-- Validate all inputs with Zod.
-- Do not leak stack traces in production.
-- Mutation endpoints should require bearer auth in deployed environments.
+- Frontend calls Convex functions through `convex/react`.
+- Reads use queries.
+- Writes use mutations.
+- External side effects such as OpenAI-compatible provider calls use actions.
+- Function arguments are validated with Convex `v` validators.
+- AI output is validated with Zod.
 
-## Authentication
+## Error Shape
 
-MVP bearer authentication:
+Convex functions throw errors rather than returning HTTP error responses. Prefer stable error messages and code-bearing custom errors where practical.
 
-```http
-Authorization: Bearer <APP_ACCESS_TOKEN>
-```
-
-Protect at least:
-
-- `POST /api/tasks`
-- `PATCH /api/tasks/:id`
-- `DELETE /api/tasks/:id`
-- `POST /api/ai/commands/preview`
-- `POST /api/ai/commands/execute`
-
-## Error Format
-
-Use a consistent error format:
-
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Invalid request body",
-    "details": {}
-  }
-}
-```
-
-Common codes:
+Common logical codes:
 
 ```txt
 VALIDATION_ERROR
 NOT_FOUND
-UNAUTHORIZED
 FORBIDDEN
 AI_PARSE_ERROR
 AI_VALIDATION_ERROR
@@ -70,228 +46,166 @@ type Task = {
 }
 ```
 
-## GET /api/health
+## api.health.check
 
-Returns server status.
+Returns backend status.
+
+### Arguments
+
+```ts
+{}
+```
 
 ### Response
 
 ```json
-{
-  "ok": true
-}
+{ "ok": true }
 ```
 
-## GET /api/tasks
+## api.tasks.list
 
 Returns task list.
 
-### Query Parameters
+### Arguments
 
-```txt
-status?: todo | in_progress | done | archived
-priority?: low | medium | high
-q?: string
-tag?: string
+```ts
+{
+  status?: 'todo' | 'in_progress' | 'done' | 'archived'
+  priority?: 'low' | 'medium' | 'high'
+  q?: string
+  tag?: string
+}
 ```
 
 ### Response
 
-```json
-{
-  "tasks": [
-    {
-      "id": "task-id",
-      "title": "請求書確認",
-      "description": null,
-      "status": "todo",
-      "priority": "medium",
-      "dueDate": null,
-      "tags": [],
-      "createdAt": "2026-07-17T00:00:00.000Z",
-      "updatedAt": "2026-07-17T00:00:00.000Z"
-    }
-  ]
-}
+```ts
+Task[]
 ```
 
-## GET /api/tasks/:id
+## api.tasks.get
 
-Returns a single task.
+Returns a single task or null.
+
+### Arguments
+
+```ts
+{ id: Id<'tasks'> }
+```
 
 ### Response
 
-```json
-{
-  "task": {
-    "id": "task-id",
-    "title": "請求書確認",
-    "description": null,
-    "status": "todo",
-    "priority": "medium",
-    "dueDate": null,
-    "tags": [],
-    "createdAt": "2026-07-17T00:00:00.000Z",
-    "updatedAt": "2026-07-17T00:00:00.000Z"
-  }
-}
+```ts
+Task | null
 ```
 
-Return `NOT_FOUND` if the task does not exist.
-
-## POST /api/tasks
+## api.tasks.create
 
 Creates a task.
 
-### Request
+### Arguments
 
-```json
+```ts
 {
-  "title": "請求書確認",
-  "description": "7月分の請求書を確認する",
-  "priority": "medium",
-  "dueDate": "2026-07-18T09:00:00.000Z",
-  "tags": ["仕事"]
+  title: string
+  description?: string | null
+  priority?: 'low' | 'medium' | 'high'
+  dueDate?: string | null
+  tags?: string[]
 }
 ```
 
 ### Response
 
-```json
-{
-  "task": {
-    "id": "task-id",
-    "title": "請求書確認",
-    "description": "7月分の請求書を確認する",
-    "status": "todo",
-    "priority": "medium",
-    "dueDate": "2026-07-18T09:00:00.000Z",
-    "tags": ["仕事"],
-    "createdAt": "2026-07-17T00:00:00.000Z",
-    "updatedAt": "2026-07-17T00:00:00.000Z"
-  }
-}
+```ts
+Task
 ```
 
-## PATCH /api/tasks/:id
+## api.tasks.update
 
 Updates a task.
 
-### Request
+### Arguments
 
-All fields are optional, but at least one field should be provided.
-
-```json
+```ts
 {
-  "title": "請求書確認を完了する",
-  "description": null,
-  "status": "done",
-  "priority": "high",
-  "dueDate": null,
-  "tags": ["仕事", "経理"]
+  id: Id<'tasks'>
+  title?: string
+  description?: string | null
+  status?: 'todo' | 'in_progress' | 'done' | 'archived'
+  priority?: 'low' | 'medium' | 'high'
+  dueDate?: string | null
+  tags?: string[]
 }
 ```
 
 ### Response
 
-```json
-{
-  "task": {
-    "id": "task-id",
-    "title": "請求書確認を完了する",
-    "description": null,
-    "status": "done",
-    "priority": "high",
-    "dueDate": null,
-    "tags": ["仕事", "経理"],
-    "createdAt": "2026-07-17T00:00:00.000Z",
-    "updatedAt": "2026-07-17T00:00:00.000Z"
-  }
-}
+```ts
+Task
 ```
 
-## DELETE /api/tasks/:id
+Throws `NOT_FOUND` if the task does not exist.
+
+## api.tasks.remove
 
 Deletes a task.
 
-### Response
+### Arguments
 
-```json
-{
-  "ok": true
-}
+```ts
+{ id: Id<'tasks'> }
 ```
 
-## POST /api/ai/commands/preview
+### Response
+
+```ts
+{ ok: true }
+```
+
+Throws `NOT_FOUND` if the task does not exist.
+
+## api.ai.preview
 
 Creates a preview of AI-proposed task operations.
 
-This endpoint must not mutate the database.
+This action must not mutate tasks.
 
-### Request
+### Arguments
 
-```json
-{
-  "input": "明日の朝9時に請求書確認のタスクを追加して"
-}
+```ts
+{ input: string }
 ```
 
 ### Response
 
-```json
+```ts
 {
-  "message": "次のタスクを追加します。",
-  "actions": [
-    {
-      "type": "create_task",
-      "payload": {
-        "title": "請求書確認",
-        "description": null,
-        "priority": "medium",
-        "dueDate": "2026-07-18T09:00:00.000Z",
-        "tags": []
-      }
-    }
-  ],
-  "requiresConfirmation": true
+  message: string
+  actions: AiTaskAction[]
+  requiresConfirmation: boolean
 }
 ```
 
-## POST /api/ai/commands/execute
+## api.ai.execute
 
 Executes previously previewed and validated AI actions.
 
-### Request
+### Arguments
 
-```json
+```ts
 {
-  "actions": [
-    {
-      "type": "create_task",
-      "payload": {
-        "title": "請求書確認",
-        "description": null,
-        "priority": "medium",
-        "dueDate": "2026-07-18T09:00:00.000Z",
-        "tags": []
-      }
-    }
-  ],
-  "confirmed": true
+  actions: AiTaskAction[]
+  confirmed?: boolean
 }
 ```
 
 ### Response
 
-```json
+```ts
 {
-  "ok": true,
-  "results": [
-    {
-      "type": "create_task",
-      "taskId": "task-id"
-    }
-  ]
+  ok: true
+  results: Array<Record<string, unknown>>
 }
 ```
 

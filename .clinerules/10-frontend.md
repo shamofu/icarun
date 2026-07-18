@@ -1,9 +1,4 @@
----
-paths:
-  - "apps/mobile/**"
----
-
-# Frontend Rules — Expo / React Native Web
+# Frontend Rules — Expo / React Native Web + Convex
 
 The frontend is an Expo app using React Native and React Native Web.
 
@@ -16,10 +11,12 @@ Use:
 - React Native Web
 - Expo Router
 - TypeScript
-- React Query
+- Convex React client (`convex/react`)
 - React Native StyleSheet or simple themed components
 
 Do not use browser-only React libraries unless they are confirmed compatible with React Native Web.
+
+React Query is no longer required for server state because Convex provides realtime queries and mutations.
 
 ## Routing
 
@@ -41,7 +38,7 @@ Initial screens:
   Delete task
 
 /settings
-  API/server status
+  Convex/server status
   Basic settings
 ```
 
@@ -71,59 +68,38 @@ Reason:
 - The app uses dynamic routes like `/tasks/[id]`.
 - Task IDs are created at runtime.
 - Static export cannot know all task URLs at build time.
-- Refreshing `/tasks/abc123` may 404 with static output.
-- SPA output plus Express fallback solves this.
-
-## Web Build Output
-
-The Expo Web build should output to:
-
-```txt
-<project-root>/apps/server/web-build
-```
-
-Recommended script:
-
-```json
-{
-  "scripts": {
-    "build:web": "expo export --platform web --output-dir ../server/web-build"
-  }
-}
-```
-
-Do not export into a directory that contains server source files.
+- SPA output avoids dynamic route refresh problems on compatible hosts.
 
 ## State Management
 
-Use React Query for server state.
+Use Convex for server state.
 
-Recommended hooks:
+Recommended usage:
 
 ```ts
-useTasks()
-useTask(id)
-useCreateTask()
-useUpdateTask()
-useDeleteTask()
-usePreviewAiCommand()
-useExecuteAiCommand()
+useQuery(api.tasks.list, args)
+useQuery(api.tasks.get, { id })
+useMutation(api.tasks.create)
+useMutation(api.tasks.update)
+useMutation(api.tasks.remove)
+useAction(api.ai.preview)
+useAction(api.ai.execute)
 ```
 
 Avoid unnecessary global state.
 
-## API Client
+## Convex Client
 
-Create a small API client in:
+Create a small Convex client in:
 
 ```txt
-<project-root>/apps/mobile/src/lib/api.ts
+apps/mobile/src/lib/convex.ts
 ```
 
 Use:
 
 ```env
-EXPO_PUBLIC_API_BASE_URL=http://localhost:3000
+EXPO_PUBLIC_CONVEX_URL=http://127.0.0.1:3210
 ```
 
 Only public frontend-safe variables may use the `EXPO_PUBLIC_` prefix.
@@ -132,8 +108,8 @@ Never reference these in frontend code:
 
 ```env
 OPENAI_API_KEY
-DATABASE_URL
-APP_ACCESS_TOKEN
+OPENAI_BASE_URL
+OPENAI_MODEL
 ```
 
 ## AI Command UI
@@ -142,11 +118,11 @@ The AI command bar should follow this flow:
 
 ```txt
 User input
-  -> POST /api/ai/commands/preview
+  -> api.ai.preview Convex action
   -> Show proposed actions
   -> User confirms
-  -> POST /api/ai/commands/execute
-  -> Refresh tasks
+  -> api.ai.execute Convex action
+  -> Convex realtime queries refresh UI
 ```
 
 Never execute AI actions immediately without preview and confirmation.
@@ -155,14 +131,15 @@ Never execute AI actions immediately without preview and confirmation.
 
 Use TypeScript everywhere.
 
-Prefer path alias:
+Use path aliases:
 
 ```json
 {
   "paths": {
-    "#/*": ["./src/*"]
+    "#/*": ["./src/*"],
+    "@/*": ["./*"]
   }
 }
 ```
 
-This mirrors the style used by Bluesky.
+`@/*` is used for imports from `apps/mobile/convex/_generated/*`.

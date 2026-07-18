@@ -1,52 +1,84 @@
-﻿# Deployment Guide
+# Deployment Guide
 
-icarun is designed to deploy to Railway or a similar Node.js-compatible PaaS.
+icarun is designed as a Convex-backed Expo / React Native Web SPA.
 
-The preferred deployment is a single Node.js service that serves both:
+The deployment has two parts:
 
-1. Express API routes under `/api/*`
-2. Expo Web SPA static files
+1. Convex backend deployment
+2. Static SPA frontend hosting
 
 ## Architecture
 
 ```txt
-Railway Node.js Service
+Static SPA host
   |
-  +-- Express API
+  | EXPO_PUBLIC_CONVEX_URL
+  v
+Convex backend
   |
-  +-- Expo Web static files
+  +-- Convex database
   |
-  +-- SPA fallback to index.html
+  +-- Convex queries/mutations/actions
   |
-  +-- PostgreSQL via DATABASE_URL
-  |
-  +-- OpenAI-compatible API via server-side env
+  +-- OpenAI-compatible API via Convex env vars
 ```
 
-## Required Railway Services
+## Required Services
 
-- Node.js app service
-- PostgreSQL database service
+- Convex project/deployment
+- Static hosting provider for `apps/mobile/dist`
+
+The static host can be Netlify, Vercel static output, GitHub Pages, Railway static hosting, or any provider that can serve an SPA with `index.html` fallback.
 
 ## Required Environment Variables
 
+Frontend build-time variable:
+
 ```env
-NODE_ENV=production
-PORT=<injected by Railway>
+EXPO_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
+```
 
-DATABASE_URL=${{Postgres.DATABASE_URL}}
+This is safe to expose to the client.
 
+Convex backend environment variables:
+
+```env
 OPENAI_API_KEY=sk-your-key
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4.1-mini
+```
 
-APP_ORIGIN=https://your-app.up.railway.app
-APP_ACCESS_TOKEN=replace-with-long-random-token
+Set backend secrets on the Convex deployment:
+
+```bash
+npx convex env set OPENAI_API_KEY sk-your-key
+npx convex env set OPENAI_BASE_URL https://api.openai.com/v1
+npx convex env set OPENAI_MODEL gpt-4.1-mini
 ```
 
 Do not set server secrets as Expo public variables.
 
-Only variables prefixed with `EXPO_PUBLIC_` may be referenced in frontend code.
+## Local Development
+
+Install dependencies:
+
+```bash
+pnpm install
+```
+
+Start Convex dev:
+
+```bash
+pnpm --filter @icarun/mobile convex:dev
+```
+
+This creates/uses a Convex deployment, regenerates `convex/_generated`, and writes the local public Convex URL to `apps/mobile/.env.local`.
+
+Start Expo Web:
+
+```bash
+pnpm --filter @icarun/mobile web
+```
 
 ## Build Lifecycle
 
@@ -56,92 +88,37 @@ Expected root-level build:
 pnpm build
 ```
 
-Expected root-level start:
+This runs:
 
 ```bash
-pnpm start
+pnpm --filter @icarun/mobile build
 ```
 
-Expected migration command:
+and writes the static web output to:
+
+```txt
+apps/mobile/dist
+```
+
+## Convex Production Deploy
+
+Deploy Convex functions and build against the production Convex URL:
 
 ```bash
-pnpm --filter @icarun/server db:migrate
+pnpm --filter @icarun/mobile convex:deploy
 ```
 
-## railway.json
+The script uses:
 
-Expected file:
-
-```txt
-railway.json
+```bash
+convex deploy --cmd-url-env-var-name EXPO_PUBLIC_CONVEX_URL --cmd "expo export --platform web --output-dir dist"
 ```
 
-Expected shape:
-
-```json
-{
-  "$schema": "https://railway.com/railway.schema.json",
-  "build": {
-    "buildCommand": "pnpm build"
-  },
-  "deploy": {
-    "preDeployCommand": "pnpm --filter @icarun/server db:migrate",
-    "startCommand": "pnpm start",
-    "restartPolicyType": "ON_FAILURE"
-  }
-}
-```
-
-## Server Binding
-
-Railway injects `PORT`.
-
-The Express server must use:
-
-```ts
-const port = Number(process.env.PORT) || 3000
-app.listen(port, '0.0.0.0')
-```
-
-Do not bind only to `localhost` in production.
-
-## Web Build Output
-
-Expo Web should output into the server app:
-
-```txt
-apps/server/web-build
-```
-
-Recommended mobile script:
-
-```json
-{
-  "build:web": "expo export --platform web --output-dir ../server/web-build"
-}
-```
-
-Do not export into server source directories.
+`convex deploy` sets `EXPO_PUBLIC_CONVEX_URL` for the build command so the built frontend points at the production Convex deployment.
 
 ## SPA Fallback
 
-Express route order must be:
-
-1. API routes
-2. static assets
-3. SPA fallback
-
-Expected behavior:
-
-```txt
-/api/health       -> API response
-/api/tasks        -> API response
-/assets/*         -> static asset
-/tasks/abc123     -> web-build/index.html
-/settings         -> web-build/index.html
-```
-
-This requires Expo config:
+Expo config must keep:
 
 ```ts
 web: {
@@ -150,19 +127,12 @@ web: {
 }
 ```
 
-Do not use `web.output: 'static'` for this app because task detail routes are dynamic.
+The static host should serve `index.html` for non-file routes such as:
 
-## CORS
-
-Production should normally be same-origin because Express serves the frontend.
-
-Development can allow Expo dev server:
-
-```env
-DEV_WEB_ORIGIN=http://localhost:8081
+```txt
+/tasks/abc123
+/settings
 ```
-
-Do not use unrestricted `*` CORS for private APIs.
 
 ## Deployment Checklist
 
@@ -170,19 +140,18 @@ Before deployment:
 
 - `pnpm install` succeeds
 - `pnpm typecheck` succeeds
+- Convex functions are ready via `pnpm --filter @icarun/mobile convex:dev`
 - `pnpm build` succeeds
-- Drizzle migrations exist
+- `apps/mobile/convex/_generated/` is committed
 - `.env.example` is up to date
-- Railway env vars are configured
+- Convex env vars are configured
 - OpenAI key is not exposed to frontend
-- Express listens on `0.0.0.0`
-- SPA fallback is implemented
+- SPA fallback is configured on the static host
 
 After deployment:
 
-- Check Railway logs
 - Open the app URL
-- Test `/api/health`
+- Check Settings for Convex health
 - Create a task
 - Refresh a dynamic task URL like `/tasks/<id>`
 - Test AI preview with a safe command

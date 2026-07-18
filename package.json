@@ -1,14 +1,11 @@
 {
   "name": "icarun",
   "version": "0.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "private": true,
+  "description": "icarun task manager (Expo / React Native Web + Convex)",
   "author": "shamofu",
-  "keywords": [],
   "license": "MIT",
+  "type": "module",
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
@@ -16,5 +13,12 @@
       "onFail": "download"
     }
   },
-  "type": "module"
+  "scripts": {
+    "dev": "pnpm --filter @icarun/mobile dev",
+    "dev:web": "pnpm --filter @icarun/mobile web",
+    "convex:dev": "pnpm --filter @icarun/mobile convex:dev",
+    "convex:deploy": "pnpm --filter @icarun/mobile convex:deploy",
+    "build": "pnpm --filter @icarun/mobile build",
+    "typecheck": "pnpm -r typecheck"
+  }
 }

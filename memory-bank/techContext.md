@@ -2,13 +2,13 @@
 
 ## Runtime
 
-Use Node.js.
+Use Node.js for local tooling and Expo/Convex development.
 
-Current local environment is expected to use:
+Current local environment has been verified with:
 
 ```txt
-Node 24.x
-pnpm 11.x
+Node 24.18.0
+pnpm 11.13.1
 ```
 
 ## Package Manager
@@ -21,159 +21,107 @@ Do not use npm or yarn unless explicitly requested.
 
 Use:
 
-- Expo
-- React Native
-- React Native Web
-- Expo Router
-- TypeScript
-- React Query
+- Expo SDK 57
+- React 19
+- React Native 0.86
+- React Native Web 0.21
+- Expo Router 57
+- TypeScript 6
+- Convex React client
 
 ## Backend Stack
 
 Use:
 
-- Express
-- TypeScript
-- Drizzle ORM
-- drizzle-kit
-- PostgreSQL
-- Zod
-- OpenAI-compatible Chat Completions API
+- Convex
+- TypeScript Convex functions
+- Convex schema validators (`convex/values`)
+- Zod for AI output validation
+- OpenAI-compatible Chat Completions API from Convex actions
 
 ## Database
 
-Use PostgreSQL.
+Use Convex.
 
-Use Drizzle ORM.
-
-Use drizzle-kit migrations.
-
-Do not use Prisma.
+Do not use PostgreSQL, Drizzle ORM, drizzle-kit, Prisma, or Express for the MVP unless explicitly requested later.
 
 ## Deployment
 
-Primary target:
+Primary backend target:
 
 ```txt
-Railway
+Convex Cloud or compatible Convex deployment
 ```
 
-Deployment style:
+Frontend deployment style:
 
 ```txt
-single Node.js service
+static SPA hosting
 ```
 
-The service should:
+The static host should:
 
-- build the Expo Web app
-- build the Express server
-- run Drizzle migrations
-- start Express
-- serve web + API from one public URL
+- serve the Expo Web build output
+- support `index.html` fallback for dynamic routes
 
 ## Environment Variables
-
-Server-side:
-
-```env
-NODE_ENV=development
-PORT=3000
-
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/icarun
-
-OPENAI_API_KEY=sk-your-key
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4.1-mini
-
-APP_ORIGIN=http://localhost:3000
-DEV_WEB_ORIGIN=http://localhost:8081
-
-APP_ACCESS_TOKEN=replace-with-long-random-token
-```
 
 Frontend-safe:
 
 ```env
-EXPO_PUBLIC_API_BASE_URL=http://localhost:3000
+EXPO_PUBLIC_CONVEX_URL=http://127.0.0.1:3210
+```
+
+Convex server-side:
+
+```env
+OPENAI_API_KEY=sk-your-key
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4.1-mini
 ```
 
 Never expose these to the frontend:
 
 ```env
 OPENAI_API_KEY
-DATABASE_URL
-APP_ACCESS_TOKEN
+OPENAI_BASE_URL
+OPENAI_MODEL
 ```
 
-## Recommended Root Scripts
+## Root Scripts
 
 ```json
 {
   "scripts": {
-    "dev": "pnpm --parallel --filter @icarun/server --filter @icarun/mobile dev",
-    "dev:server": "pnpm --filter @icarun/server dev",
-    "dev:mobile": "pnpm --filter @icarun/mobile dev",
-    "build": "pnpm --filter @icarun/mobile build:web && pnpm --filter @icarun/server build",
-    "start": "pnpm --filter @icarun/server start",
-    "typecheck": "pnpm -r typecheck",
-    "db:generate": "pnpm --filter @icarun/server db:generate",
-    "db:migrate": "pnpm --filter @icarun/server db:migrate",
-    "db:studio": "pnpm --filter @icarun/server db:studio"
+    "dev": "pnpm --filter @icarun/mobile dev",
+    "dev:web": "pnpm --filter @icarun/mobile web",
+    "convex:dev": "pnpm --filter @icarun/mobile convex:dev",
+    "convex:deploy": "pnpm --filter @icarun/mobile convex:deploy",
+    "build": "pnpm --filter @icarun/mobile build",
+    "typecheck": "pnpm -r typecheck"
   }
 }
 ```
 
-## Recommended Server Scripts
-
-```json
-{
-  "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
-  }
-}
-```
-
-## Recommended Mobile Scripts
+## Mobile Scripts
 
 ```json
 {
   "scripts": {
     "dev": "expo start",
     "web": "expo start --web",
-    "build:web": "expo export --platform web --output-dir ../server/web-build",
+    "build": "expo export --platform web --output-dir dist",
+    "convex:dev": "convex dev",
+    "convex:deploy": "convex deploy --cmd-url-env-var-name EXPO_PUBLIC_CONVEX_URL --cmd \"expo export --platform web --output-dir dist\"",
     "typecheck": "tsc --noEmit"
   }
 }
 ```
 
-## Railway Config Direction
+## Convex Notes
 
-Use:
+`pnpm --filter @icarun/mobile convex:dev` configures a deployment, pushes functions, and regenerates `convex/_generated`.
 
-```txt
-<project-root>/railway.json
-```
+Generated files under `apps/mobile/convex/_generated/` should be committed.
 
-Expected shape:
-
-```json
-{
-  "$schema": "https://railway.com/railway.schema.json",
-  "build": {
-    "buildCommand": "pnpm build"
-  },
-  "deploy": {
-    "preDeployCommand": "pnpm --filter @icarun/server db:migrate",
-    "startCommand": "pnpm start",
-    "restartPolicyType": "ON_FAILURE"
-  }
-}
-```
+Local files under `apps/mobile/.convex/` and `apps/mobile/.env.local` should not be committed.

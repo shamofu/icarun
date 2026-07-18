@@ -1,83 +1,63 @@
-﻿# Database Design
+# Database Design
 
-icarun uses PostgreSQL with Drizzle ORM and drizzle-kit.
+icarun uses Convex for persistence and backend functions.
 
-Do not use Prisma.
+Do not use PostgreSQL, Drizzle ORM, drizzle-kit, Prisma, or SQL migrations unless explicitly requested later.
 
-## Why Drizzle
+## Why Convex
 
-Drizzle is chosen because this project prioritizes PaaS deployment simplicity.
+Convex is chosen because the project owner requested it and because it fits the MVP well:
 
-Compared with Prisma, Drizzle provides:
+- realtime task updates via `convex/react`
+- TypeScript backend functions
+- built-in query / mutation / action model
+- no separate Express REST API server
+- no ORM or migration layer
+- server-side environment variables for OpenAI-compatible provider secrets
 
-- no Prisma Client generation step
-- no Prisma query engine binary
-- lighter runtime
-- fewer deployment-time moving parts
-- explicit SQL-oriented migrations
-- sufficient type safety for a small task-management app
-
-## Database Driver
-
-Use a Drizzle-compatible PostgreSQL driver such as `postgres`.
-
-The final driver should be selected during dependency installation and verified against the installed Drizzle version.
-
-## Drizzle Config
+## Schema
 
 Expected path:
 
 ```txt
-apps/server/drizzle.config.ts
+apps/mobile/convex/schema.ts
 ```
 
-Expected direction:
+Convex schema example:
 
 ```ts
-import { defineConfig } from 'drizzle-kit'
+import { defineSchema, defineTable } from 'convex/server'
+import { v } from 'convex/values'
 
-export default defineConfig({
-  schema: './src/schema/index.ts',
-  out: './drizzle/migrations',
-  dialect: 'postgresql',
-  dbCredentials: {
-    url: process.env.DATABASE_URL!
-  }
+export default defineSchema({
+  tasks: defineTable({
+    title: v.string(),
+    description: v.union(v.string(), v.null()),
+    status: v.union(
+      v.literal('todo'),
+      v.literal('in_progress'),
+      v.literal('done'),
+      v.literal('archived')
+    ),
+    priority: v.union(
+      v.literal('low'),
+      v.literal('medium'),
+      v.literal('high')
+    ),
+    dueDate: v.union(v.string(), v.null()),
+    tags: v.array(v.string()),
+    updatedAt: v.string()
+  })
 })
 ```
 
-Confirm the exact config shape with the installed `drizzle-kit` version.
-
-## Schema Files
-
-Expected layout:
-
-```txt
-apps/server/src/schema/
-  index.ts
-  tasks.ts
-  aiOperationLogs.ts
-```
+Convex automatically adds `_id` and `_creationTime` to every document.
 
 ## Table: tasks
 
 Purpose: stores user tasks.
 
-Recommended fields:
-
-```txt
-id
-title
-description
-status
-priority
-dueDate
-tags
-createdAt
-updatedAt
-```
-
-Recommended TypeScript shape:
+Application-facing TypeScript shape:
 
 ```ts
 type Task = {
@@ -93,55 +73,25 @@ type Task = {
 }
 ```
 
-Recommended PostgreSQL choices:
+Mapping from Convex document to app type:
 
-- `uuid` or text IDs
-- `pgEnum` for status
-- `pgEnum` for priority
-- `text[]` for tags initially
-- `timestamp with time zone` for dates
-
-Recommended enums:
-
-```ts
-export const taskStatus = pgEnum('task_status', [
-  'todo',
-  'in_progress',
-  'done',
-  'archived'
-])
-
-export const taskPriority = pgEnum('task_priority', [
-  'low',
-  'medium',
-  'high'
-])
+```txt
+id        <- _id
+createdAt <- new Date(_creationTime).toISOString()
 ```
 
-## Table: ai_operation_logs
+## Table: aiOperationLogs
 
 Purpose: audit AI preview and execute behavior.
 
 Recommended fields:
 
 ```txt
-id
 input
 actions
 result
 status
-createdAt
-```
-
-Recommended column types:
-
-```txt
-id: uuid or text
-input: text
-actions: jsonb
-result: jsonb
-status: text or enum
-createdAt: timestamp with time zone
+_creationTime
 ```
 
 Recommended statuses:
@@ -158,56 +108,27 @@ execution_error
 
 ## Tags
 
-Use `text[]` for tags in the MVP.
+Use `v.array(v.string())` for tags in the MVP.
 
-Do not over-engineer tags initially.
+If tag management becomes complex later, add normalized documents or derived indexes as needed.
 
-If tag features become complex, later migrate to:
+## Codegen / Deployment Policy
 
-```txt
-tags
-task_tags
-```
-
-## Migration Policy
-
-Use drizzle-kit migrations.
-
-Recommended scripts:
-
-```json
-{
-  "scripts": {
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
-  }
-}
-```
-
-Use `db:generate` to create migration files.
-
-Use `db:migrate` to apply migrations.
-
-Use `db:push` only for local prototyping and only when explicitly acceptable.
-
-Do not use `db:push` in production.
-
-## Railway Migration
-
-Railway pre-deploy should run:
+Run Convex tooling when schema or functions change:
 
 ```bash
-pnpm --filter @icarun/server db:migrate
+pnpm --filter @icarun/mobile convex:dev
 ```
 
-This ensures migrations are applied before the new server starts.
+Generated files in `apps/mobile/convex/_generated/` should be committed.
+
+Local Convex runtime state in `apps/mobile/.convex/` must not be committed.
 
 ## Database Safety
 
 - Do not execute AI-generated SQL.
-- Do not accept table names or column names from user input.
-- Validate all input before database operations.
+- AI actions must not directly write task documents.
+- AI actions call validated task mutations for writes.
+- Validate all AI output with Zod before execution.
 - Verify task existence before update/delete.
-- Use parameterized queries through Drizzle.
+- Require confirmation for destructive or bulk AI actions.

@@ -1,71 +1,72 @@
-﻿# icarun
+# icarun
 
 icarun is a task management application inspired by Bluesky's Expo / React Native / React Native Web architecture.
 
-The app is designed as a web-first SPA with a server-side API and AI-assisted task control.
+The app is now designed as a Convex-backed SPA:
 
 ```txt
 Expo / React Native Web SPA
         |
+        | convex/react
         v
-Express API Server
-        |
-        +--> PostgreSQL via Drizzle ORM
-        |
-        +--> OpenAI-compatible Chat Completions API
+Convex backend
+        +--> Convex database
+        +--> Convex actions for OpenAI-compatible Chat Completions API
 ```
 
 ## Core Goals
 
 - Build a deployable task management MVP.
 - Use Expo + React Native Web for the frontend.
-- Use Express for the API server.
-- Use PostgreSQL for persistence.
-- Use Drizzle ORM and drizzle-kit, not Prisma.
+- Use Convex for persistence, backend functions, and realtime updates.
 - Support OpenAI-compatible providers for natural language task control.
-- Deploy to Railway or a similar Node.js-compatible PaaS.
-- Keep all secrets server-side.
+- Keep all secrets server-side in Convex deployment environment variables.
+- Keep the web app deployable as an SPA.
 
-## Why Drizzle
+## Why Convex
 
-Drizzle is chosen over Prisma because PaaS deployment simplicity is important for this project.
+Convex replaces the previous PostgreSQL + Drizzle + Express plan. It provides:
 
-Compared with Prisma, Drizzle avoids:
+- a realtime database
+- TypeScript backend functions
+- queries, mutations, and actions
+- generated end-to-end types
+- simple client integration via `convex/react`
+- server-side environment variables for AI provider secrets
 
-- Prisma Client generation as a required deployment step.
-- Prisma query engine binary/runtime concerns.
-- Extra deployment-time moving parts.
+Because Convex supplies the backend function layer, the MVP does not need an Express REST API server, Drizzle ORM, drizzle-kit migrations, Prisma, or a `DATABASE_URL`.
 
-For this app's initial needs — tasks, AI operation logs, and simple filtering — Drizzle provides enough type safety while keeping deployment lightweight.
-
-## Intended Workspace Layout
+## Workspace Layout
 
 ```txt
 icarun/
   package.json
   pnpm-workspace.yaml
-  railway.json
   .env.example
   README.md
   docs/
+  memory-bank/
 
   apps/
-    mobile/   # Expo / React Native Web app
-    server/   # Express / Drizzle / PostgreSQL API server
+    mobile/
+      app.config.ts
+      app/
+      src/
+      convex/
 ```
 
 ## Frontend
 
-The frontend should use:
+The frontend uses:
 
 - Expo
 - React Native
 - React Native Web
 - Expo Router
 - TypeScript
-- React Query
+- Convex React client
 
-Expo Web must be built as a SPA:
+Expo Web is built as a SPA:
 
 ```ts
 web: {
@@ -74,26 +75,34 @@ web: {
 }
 ```
 
-This is required because task detail routes such as `/tasks/[id]` are dynamic and cannot be statically generated ahead of time.
+This is required because task detail routes such as `/tasks/[id]` are dynamic and created at runtime.
 
 ## Backend
 
-The backend should use:
+The backend lives in:
 
-- Express
-- TypeScript
-- PostgreSQL
-- Drizzle ORM
-- drizzle-kit
-- Zod
-- OpenAI-compatible Chat Completions API
+```txt
+apps/mobile/convex/
+```
 
-The server serves both:
+Important functions:
 
-1. `/api/*` API routes
-2. Expo Web static files from `apps/server/web-build`
+```txt
+api.health.check
+api.tasks.list
+api.tasks.get
+api.tasks.create
+api.tasks.update
+api.tasks.remove
+api.ai.preview
+api.ai.execute
+```
 
-Non-API routes must fall back to `index.html` for SPA routing.
+The Convex schema is defined in:
+
+```txt
+apps/mobile/convex/schema.ts
+```
 
 ## AI Safety Model
 
@@ -103,56 +112,88 @@ The required flow is:
 
 ```txt
 User command
-  -> preview endpoint
-  -> server validates AI output
+  -> api.ai.preview
+  -> Convex action calls OpenAI-compatible API
+  -> server validates AI output with Zod
+  -> frontend shows proposed changes
   -> user confirms
-  -> execute endpoint
-  -> server mutates database
+  -> api.ai.execute
+  -> server validates again and runs Convex mutations
 ```
 
 AI output must be parsed and validated with Zod before execution.
 
-## Required API Routes
-
-```txt
-GET    /api/health
-
-GET    /api/tasks
-GET    /api/tasks/:id
-POST   /api/tasks
-PATCH  /api/tasks/:id
-DELETE /api/tasks/:id
-
-POST   /api/ai/commands/preview
-POST   /api/ai/commands/execute
-```
-
 ## Environment
 
-Copy `.env.example` to the appropriate app-local `.env` files during implementation.
+Frontend-safe value:
 
-Secrets such as `OPENAI_API_KEY`, `DATABASE_URL`, and `APP_ACCESS_TOKEN` must never be exposed to Expo client code.
+```env
+EXPO_PUBLIC_CONVEX_URL=http://127.0.0.1:3210
+```
 
-Only `EXPO_PUBLIC_*` values may be referenced from the Expo app.
+This is written to `apps/mobile/.env.local` by `npx convex dev` for local development.
 
-## Railway Deployment
+Server-only values must be set on the Convex deployment, not in Expo client code:
 
-Railway should run the app as a single Node.js service.
+```bash
+npx convex env set OPENAI_API_KEY sk-your-key
+npx convex env set OPENAI_BASE_URL https://api.openai.com/v1
+npx convex env set OPENAI_MODEL gpt-4.1-mini
+```
 
-Expected lifecycle:
+Never expose `OPENAI_API_KEY` to frontend code.
+
+## Development
+
+Install dependencies:
 
 ```bash
 pnpm install
-pnpm build
-pnpm --filter @icarun/server db:migrate
-pnpm start
 ```
 
-The Express server must listen on `process.env.PORT` and bind to `0.0.0.0`.
+Start / configure Convex:
+
+```bash
+pnpm --filter @icarun/mobile convex:dev
+```
+
+Start Expo Web:
+
+```bash
+pnpm --filter @icarun/mobile web
+```
+
+Run typecheck:
+
+```bash
+pnpm typecheck
+```
+
+Build the web SPA:
+
+```bash
+pnpm build
+```
+
+## Deployment
+
+Deploy Convex backend and build the frontend:
+
+```bash
+pnpm --filter @icarun/mobile convex:deploy
+```
+
+The generated web build is written to:
+
+```txt
+apps/mobile/dist
+```
+
+Host that directory with any static hosting provider that supports SPA fallback to `index.html`.
 
 ## Documentation
 
-Important pre-implementation docs:
+Important docs:
 
 - `docs/implementation-plan.md`
 - `docs/api-contract.md`
@@ -160,8 +201,8 @@ Important pre-implementation docs:
 - `docs/database.md`
 - `docs/deployment.md`
 - `docs/security.md`
-- `docs/adr/0001-use-drizzle.md`
+- `docs/adr/0002-use-convex.md`
 
 ## Current State
 
-This is currently a greenfield project with project memory and design docs prepared. Application code has not yet been implemented.
+The project now includes a working Expo + Convex MVP skeleton with task CRUD, AI preview/execute functions, and local Convex validation.

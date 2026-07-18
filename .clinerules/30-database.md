@@ -1,112 +1,78 @@
----
-paths:
-  - "apps/server/src/schema/**"
-  - "apps/server/drizzle/**"
-  - "apps/server/drizzle.config.ts"
----
+# Database Rules — Convex
 
-# Database Rules — Drizzle ORM / PostgreSQL
+Use Convex for persistence and backend functions.
 
-Use Drizzle ORM and drizzle-kit.
+Do not use PostgreSQL, Drizzle ORM, drizzle-kit, Prisma, or SQL migrations unless explicitly requested later.
 
-Do not use Prisma.
+## Why Convex
 
-## Why Drizzle
+Convex is preferred for this project because the user requested Convex and because the MVP benefits from:
 
-Drizzle is preferred for this project because PaaS deployment simplicity is important.
+- realtime client updates
+- TypeScript backend functions
+- built-in query/mutation/action model
+- no separate Express API server
+- no SQL/ORM migration layer
+- server-side environment variables for AI secrets
+- simpler frontend data fetching via `convex/react`
 
-Compared with Prisma, Drizzle has:
+## Schema File
 
-- no Prisma Client generation step
-- no Prisma query engine binary
-- lighter runtime
-- fewer deployment-time moving parts
-- clearer SQL-oriented migrations
-- good compatibility with serverless-style environments
-- enough power for this app's relatively simple relational needs
-
-The initial app needs:
-
-- tasks
-- optional tags later
-- AI operation logs
-- optional users later
-
-Prisma's higher-level ORM abstraction is not necessary for the first MVP.
-
-## Drizzle Config
-
-Use:
+Expected path:
 
 ```txt
-<project-root>/apps/server/drizzle.config.ts
+apps/mobile/convex/schema.ts
 ```
 
 Expected shape:
 
 ```ts
-import { defineConfig } from 'drizzle-kit'
+import { defineSchema, defineTable } from 'convex/server'
+import { v } from 'convex/values'
 
-export default defineConfig({
-  schema: './src/schema/index.ts',
-  out: './drizzle/migrations',
-  dialect: 'postgresql',
-  dbCredentials: {
-    url: process.env.DATABASE_URL!
-  }
+export default defineSchema({
+  tasks: defineTable({
+    title: v.string(),
+    description: v.union(v.string(), v.null()),
+    status: v.union(
+      v.literal('todo'),
+      v.literal('in_progress'),
+      v.literal('done'),
+      v.literal('archived')
+    ),
+    priority: v.union(
+      v.literal('low'),
+      v.literal('medium'),
+      v.literal('high')
+    ),
+    dueDate: v.union(v.string(), v.null()),
+    tags: v.array(v.string()),
+    updatedAt: v.string()
+  })
 })
 ```
 
-Important:
+Convex automatically adds:
 
-- Confirm the installed drizzle-kit version before finalizing config.
-- drizzle-kit config APIs may vary between versions.
-
-## Migration Commands
-
-Recommended scripts:
-
-```json
-{
-  "scripts": {
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
-  }
-}
+```txt
+_id
+_creationTime
 ```
 
-Use:
+Map those to application-facing fields:
 
-```bash
-pnpm --filter @icarun/server db:generate
-pnpm --filter @icarun/server db:migrate
+```txt
+id = _id
+createdAt = new Date(_creationTime).toISOString()
 ```
 
-Use `db:push` only for local prototyping.
-
-Do not use `db:push` in production unless explicitly requested.
-
-## Initial Database Tables
+## Tables
 
 ### tasks
 
-Fields:
+Purpose: stores user tasks.
 
-```txt
-id
-title
-description
-status
-priority
-dueDate
-tags
-createdAt
-updatedAt
-```
-
-Recommended TypeScript shape:
+Application-facing TypeScript shape:
 
 ```ts
 type Task = {
@@ -122,72 +88,63 @@ type Task = {
 }
 ```
 
-Recommended PostgreSQL choices:
+### aiOperationLogs
 
-- `uuid` or text IDs
-- `pgEnum` for status
-- `pgEnum` for priority
-- `text[]` for tags initially
-- `timestamp with time zone` for dates
+Purpose: audit AI preview and execute behavior.
 
-Recommended enums:
-
-```ts
-export const taskStatus = pgEnum('task_status', [
-  'todo',
-  'in_progress',
-  'done',
-  'archived'
-])
-
-export const taskPriority = pgEnum('task_priority', [
-  'low',
-  'medium',
-  'high'
-])
-```
-
-### ai_operation_logs
-
-Add this table either in MVP or soon after.
-
-Fields:
+Recommended fields:
 
 ```txt
-id
 input
 actions
 result
 status
-createdAt
+_creationTime
 ```
 
-Recommended column types:
+Recommended statuses:
 
 ```txt
-id: uuid or text
-input: text
-actions: jsonb
-result: jsonb
-status: text or enum
-createdAt: timestamp with time zone
+previewed
+executed
+rejected
+parse_error
+validation_error
+provider_error
+execution_error
 ```
-
-Reason:
-
-- AI actions should be auditable.
-- AI parse and validation errors need debugging.
-- Dangerous or rejected AI operations should be traceable.
 
 ## Tags
 
-Use `text[]` for tags initially.
+Use `string[]` / `v.array(v.string())` for tags in the MVP.
 
-If tag management becomes complex later, migrate to normalized tables:
+Do not over-engineer tags initially.
 
-```txt
-tags
-task_tags
+If tag features become complex, later add normalized structures or derived indexes as needed.
+
+## Deployment / Codegen Policy
+
+Run Convex tooling when backend functions or schema change:
+
+```bash
+pnpm --filter @icarun/mobile convex:dev
 ```
 
-Do not over-engineer tags in the first MVP.
+For production backend deployment:
+
+```bash
+pnpm --filter @icarun/mobile convex:deploy
+```
+
+Generated files under `apps/mobile/convex/_generated/` should be committed.
+
+Local runtime files under `apps/mobile/.convex/` must not be committed.
+
+## Database Safety
+
+- Do not execute AI-generated SQL.
+- AI actions must not write directly to Convex tables.
+- AI actions must call validated mutations for writes.
+- Validate all AI output before execution.
+- Verify task existence before update/delete.
+- Require confirmation for destructive or bulk AI actions.

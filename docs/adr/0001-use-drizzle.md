@@ -1,4 +1,7 @@
-﻿# ADR 0001 — Use Drizzle ORM Instead of Prisma
+> SUPERSEDED by ADR 0002 (Use Convex). icarun migrated off PostgreSQL + Drizzle
+> + Express to Convex. This ADR is retained for history only. See
+> docs/adr/0002-use-convex.md.
+# ADR 0001 — Use Drizzle ORM Instead of Prisma
 
 ## Status
 

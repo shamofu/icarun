@@ -1,119 +1,74 @@
----
-paths:
-  - "apps/server/**"
----
+# Backend Rules — Convex
 
-# Backend Rules — Express API
+The backend is a Convex backend co-located with the Expo app under:
 
-The backend is a Node.js + Express API server.
+```txt
+apps/mobile/convex/
+```
 
-It serves both:
+It serves application backend functionality through Convex functions:
 
-1. `/api/*` API routes
-2. Expo Web static files from `web-build`
+1. queries for reads
+2. mutations for writes
+3. actions for side effects such as OpenAI-compatible API calls
+
+There is no Express REST API server in the MVP.
 
 ## Stack
 
 Use:
 
-- Node.js
-- Express
+- Convex
 - TypeScript
-- Drizzle ORM
-- drizzle-kit
-- PostgreSQL
-- Zod
-- OpenAI-compatible Chat Completions API
+- Convex schema validators (`convex/values`)
+- Zod for AI output validation
+- OpenAI-compatible Chat Completions API from Convex actions
 
-Do not use Prisma.
+Do not use PostgreSQL, Drizzle ORM, drizzle-kit, Prisma, or Express unless explicitly requested later.
 
-## Required Routes
+## Required Functions
 
 ```txt
-GET    /api/health
+api.health.check
 
-GET    /api/tasks
-GET    /api/tasks/:id
-POST   /api/tasks
-PATCH  /api/tasks/:id
-DELETE /api/tasks/:id
+api.tasks.list
+api.tasks.get
+api.tasks.create
+api.tasks.update
+api.tasks.remove
 
-POST   /api/ai/commands/preview
-POST   /api/ai/commands/execute
+api.ai.preview
+api.ai.execute
 ```
 
-## Express Route Order
-
-Route order matters.
-
-Use this order:
-
-```txt
-1. API routes
-2. Static assets
-3. SPA fallback
-```
-
-Expected behavior:
-
-```txt
-/api/health       -> API route
-/api/tasks        -> API route
-/assets/*         -> static file
-/tasks/abc123     -> web-build/index.html
-/settings         -> web-build/index.html
-```
-
-The SPA fallback must return `index.html` for non-API routes.
-
-## Railway Server Binding
-
-Railway injects `PORT`.
-
-Use:
-
-```ts
-const port = Number(process.env.PORT) || 3000
-
-app.listen(port, '0.0.0.0')
-```
-
-Do not bind only to `localhost` in production.
+Internal helpers may live in `convex/aiInternal.ts`.
 
 ## Validation
 
+Use Convex `v` validators for:
+
+- function arguments
+- schema fields
+- enum-like literal unions
+
 Use Zod for:
 
-- request bodies
-- query parameters
-- route params
-- AI output
-- environment variables where practical
+- AI output parsing and validation
+- AI action schema validation before execution
 
 Do not trust client input.
 
 Do not trust AI output.
 
-## Error Format
+## Error Handling
 
-Use a consistent error response shape:
+Convex functions throw errors to clients. Prefer stable error messages and code-bearing custom errors where practical.
 
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Invalid request body",
-    "details": {}
-  }
-}
-```
-
-Common error codes:
+Common logical codes:
 
 ```txt
 VALIDATION_ERROR
 NOT_FOUND
-UNAUTHORIZED
 FORBIDDEN
 AI_PARSE_ERROR
 AI_VALIDATION_ERROR
@@ -122,54 +77,30 @@ DATABASE_ERROR
 INTERNAL_ERROR
 ```
 
-Do not leak stack traces in production.
-
-## CORS
-
-Production should usually be same-origin because Express serves the frontend.
-
-Development may allow the Expo web dev server.
-
-Use environment variables:
-
-```env
-APP_ORIGIN=http://localhost:3000
-DEV_WEB_ORIGIN=http://localhost:8081
-```
-
-Do not use unrestricted `*` CORS for private APIs.
+Do not leak secrets in errors.
 
 ## Authentication
 
-MVP may use simple bearer token authentication.
-
-Use:
-
-```env
-APP_ACCESS_TOKEN=replace-with-long-random-token
-```
-
-Require:
-
-```txt
-Authorization: Bearer <APP_ACCESS_TOKEN>
-```
-
-Protect at least:
-
-- task mutation endpoints
-- AI endpoints
-
 A full auth system is out of scope for the first MVP unless explicitly requested.
+
+If authentication is added later, prefer Convex-supported auth integrations or Convex auth patterns. Do not reintroduce a private bearer token into the Expo client.
 
 ## OpenAI-Compatible API
 
-Support OpenAI-compatible providers through:
+Support OpenAI-compatible providers through Convex deployment environment variables:
 
 ```env
 OPENAI_API_KEY=
-OPENAI_BASE_URL=
-OPENAI_MODEL=
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4.1-mini
+```
+
+Set them with:
+
+```bash
+npx convex env set OPENAI_API_KEY sk-your-key
+npx convex env set OPENAI_BASE_URL https://api.openai.com/v1
+npx convex env set OPENAI_MODEL gpt-4.1-mini
 ```
 
 Default request direction:
@@ -189,7 +120,7 @@ Some providers may not support `response_format`.
 
 If rejected:
 
-1. Retry without `response_format` if appropriate.
+1. Retry without `response_format` when appropriate.
 2. Always parse JSON.
 3. Always validate with Zod.
 4. Never execute invalid output.
@@ -205,8 +136,7 @@ Mandatory rules:
 5. Update/delete operations must verify task existence.
 6. Delete actions require user confirmation.
 7. Bulk updates require user confirmation.
-8. AI endpoints should be rate-limited.
-9. AI operations should be logged where possible.
+8. AI operations should be logged where possible.
 
 Allowed AI actions:
 

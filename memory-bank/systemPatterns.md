@@ -5,85 +5,76 @@
 ```txt
 Expo / React Native Web SPA
         |
-        | HTTPS
+        | convex/react
         v
-Express API Server
+Convex backend
         |
-        +--> PostgreSQL via Drizzle ORM
+        +--> Convex database
         |
-        +--> OpenAI-compatible Chat Completions API
+        +--> Convex action -> OpenAI-compatible Chat Completions API
 ```
 
 ## Deployment Pattern
 
-Use one Railway service.
+Use Convex for backend functions and database.
 
-The Express server should:
+Use static SPA hosting for the web app output:
 
-1. serve `/api/*`
-2. serve Expo Web static assets
-3. fallback non-API paths to `index.html`
+```txt
+apps/mobile/dist
+```
 
-This enables deep links such as:
+The static host must serve `index.html` for dynamic routes such as:
 
 ```txt
 /tasks/abc123
 ```
 
-to work after refresh.
-
 ## Frontend Pattern
 
 Use Expo Router.
 
-Use React Query for server state.
+Use Convex React hooks for server state:
+
+```ts
+useQuery(api.tasks.list, args)
+useMutation(api.tasks.create)
+useAction(api.ai.preview)
+```
 
 Keep UI state local unless global state is truly needed.
 
 ## Backend Pattern
 
-Use Express route modules:
+Use Convex function modules:
 
 ```txt
-routes/
+convex/
   health.ts
   tasks.ts
   ai.ts
+  aiInternal.ts
 ```
 
-Use services for business logic:
+Use helpers for reusable backend logic:
 
 ```txt
-services/
-  taskService.ts
-  openaiClient.ts
-  aiTaskController.ts
-```
-
-Use validators for Zod schemas:
-
-```txt
-validators/
-  taskSchemas.ts
+convex/lib/
   aiSchemas.ts
+  openai.ts
+  prompt.ts
+  serializers.ts
 ```
 
 ## Database Pattern
 
-Use Drizzle schema files:
+Use Convex schema:
 
 ```txt
-src/schema/
-  index.ts
-  tasks.ts
-  aiOperationLogs.ts
+convex/schema.ts
 ```
 
-Use drizzle-kit for migrations:
-
-```txt
-drizzle/migrations/
-```
+Convex automatically adds `_id` and `_creationTime`. Map them to app-facing `id` and `createdAt` in serializers.
 
 ## AI Safety Pattern
 
@@ -114,30 +105,22 @@ web: {
 }
 ```
 
-Express must return `index.html` for non-API, non-static requests.
+The static host should return `index.html` for non-file routes.
 
-## Railway Pattern
+## Convex Pattern
 
-Railway build should run:
-
-```bash
-pnpm build
-```
-
-Railway pre-deploy should run:
+Run during development:
 
 ```bash
-pnpm --filter @icarun/server db:migrate
+pnpm --filter @icarun/mobile convex:dev
 ```
 
-Railway start should run:
+Run for production deploy/build:
 
 ```bash
-pnpm start
+pnpm --filter @icarun/mobile convex:deploy
 ```
 
-The server must use:
+Generated files under `apps/mobile/convex/_generated/` should be committed.
 
-```ts
-app.listen(port, '0.0.0.0')
-```
+Local runtime files under `apps/mobile/.convex/` should not be committed.

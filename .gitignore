@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# expo / metro
+.expo/
+dist/
+web-build/
+*.tsbuildinfo
+
+# convex local runtime state
+.convex/
+apps/*/.convex/
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# os
+.DS_Store
+Thumbs.db

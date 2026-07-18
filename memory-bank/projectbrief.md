@@ -5,12 +5,11 @@ icarun is a task management application inspired by Bluesky's Expo / React Nativ
 The goal is to build a deployable MVP with:
 
 - Expo / React Native Web frontend
-- Express backend API
-- PostgreSQL database
-- Drizzle ORM and drizzle-kit migrations
+- Convex backend and database
+- Convex queries, mutations, and actions
 - OpenAI-compatible natural language task control
-- Railway deployment support
-- Server-side secret management
+- static SPA deployment support
+- server-side secret management through Convex environment variables
 - SPA routing that works with dynamic task URLs
 
 ## MVP Scope
@@ -26,7 +25,8 @@ The MVP should include:
 - task filtering
 - AI command preview
 - AI command execution after confirmation
-- Railway deployment configuration
+- Convex deployment configuration
+- static SPA build output
 
 ## Out of Scope Initially
 
@@ -39,18 +39,23 @@ The first MVP should not include:
 - complex role-based permissions
 - advanced analytics
 - complex tag normalization
+- PostgreSQL
+- Drizzle ORM
+- drizzle-kit
 - Prisma
+- Express REST API server
 - AI-generated SQL execution
 
 ## Primary Technical Decision
 
-Use Drizzle ORM instead of Prisma.
+Use Convex instead of PostgreSQL + Drizzle + Express.
 
 Reason:
 
-- simpler PaaS deployment
-- no Prisma Client generation step
-- no Prisma query engine binary
-- lighter runtime
-- easier migration visibility
-- sufficient for the app's relational needs
+- user requested Convex
+- realtime data updates
+- TypeScript backend functions
+- no separate REST API server
+- no ORM/migration layer
+- simpler AI server-side secret handling
+- preview -> confirm -> execute AI model maps naturally to Convex actions plus mutations

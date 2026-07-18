@@ -1,10 +1,10 @@
-﻿# AI Contract
+# AI Contract
 
 This document defines the AI task-control contract for icarun.
 
 ## Purpose
 
-icarun supports natural language task control through an OpenAI-compatible Chat Completions API.
+icarun supports natural language task control through an OpenAI-compatible Chat Completions API called from Convex actions.
 
 The AI must only propose structured actions. It must not directly access the database or execute operations.
 
@@ -12,25 +12,33 @@ The AI must only propose structured actions. It must not directly access the dat
 
 ```txt
 User input
-  -> POST /api/ai/commands/preview
-  -> server calls OpenAI-compatible API
-  -> server parses JSON
-  -> server validates with Zod
+  -> api.ai.preview Convex action
+  -> action calls OpenAI-compatible API
+  -> action parses JSON
+  -> action validates with Zod
   -> frontend shows proposed actions
   -> user confirms
-  -> POST /api/ai/commands/execute
-  -> server validates again
-  -> server executes allowed operations
+  -> api.ai.execute Convex action
+  -> action validates again
+  -> action executes allowed Convex mutations
 ```
 
 ## Environment Variables
 
-Server-only:
+Server-only Convex deployment environment variables:
 
 ```env
 OPENAI_API_KEY=
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4.1-mini
+```
+
+Set them with:
+
+```bash
+npx convex env set OPENAI_API_KEY sk-your-key
+npx convex env set OPENAI_BASE_URL https://api.openai.com/v1
+npx convex env set OPENAI_MODEL gpt-4.1-mini
 ```
 
 These must never be referenced from Expo client code.
@@ -135,35 +143,35 @@ The AI must never:
 - perform bulk changes without user confirmation
 - expose or request secrets
 
-## Preview Endpoint Responsibilities
+## Preview Action Responsibilities
 
-`POST /api/ai/commands/preview` must:
+`api.ai.preview` must:
 
 - validate the user input
 - optionally provide relevant task context to the model
-- call the model server-side
+- call the model server-side from Convex
 - parse JSON
 - validate actions with Zod
 - determine whether confirmation is required
 - return preview data only
-- not mutate the database
+- not mutate tasks
 
-## Execute Endpoint Responsibilities
+## Execute Action Responsibilities
 
-`POST /api/ai/commands/execute` must:
+`api.ai.execute` must:
 
 - validate the request body
 - validate all submitted actions
 - verify update/delete task IDs exist
 - require `confirmed: true` for destructive or bulk actions
-- execute allowed operations through task services
+- execute allowed operations through task mutations
 - log the operation result when possible
 
 ## Confirmation Rules
 
 Always require confirmation for:
 
-- every AI action execution
+- every AI action execution in the UI
 - delete actions
 - bulk update actions
 - bulk delete actions
@@ -171,19 +179,7 @@ Always require confirmation for:
 
 ## Invalid Output Handling
 
-If AI output fails parsing or validation, return:
-
-```json
-{
-  "error": {
-    "code": "AI_VALIDATION_ERROR",
-    "message": "AI response did not match the expected action schema",
-    "details": {}
-  }
-}
-```
-
-Do not execute any partial actions from an invalid response.
+If AI output fails parsing or validation, throw a stable AI parse/validation error and do not execute partial actions.
 
 ## Logging
 
@@ -194,6 +190,6 @@ AI operation logs should record:
 - validation result
 - execution result, if any
 - status
-- createdAt
+- `_creationTime`
 
 Do not log API keys or authorization headers.

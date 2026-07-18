@@ -2,81 +2,74 @@
 
 icarun is a task management application inspired by Bluesky's Expo / React Native / React Native Web architecture.
 
-The app should be designed as:
+The app is designed as:
 
 ```txt
 Expo / React Native Web SPA
         |
+        | convex/react
         v
-Express API Server
-        |
-        +--> PostgreSQL via Drizzle ORM
-        |
-        +--> OpenAI-compatible Chat Completions API
+Convex backend
+        +--> Convex database
+        +--> Convex actions for OpenAI-compatible Chat Completions API
 ```
 
 ## Core Decisions
 
 - Use Expo + React Native + React Native Web for the frontend.
-- Use Express for the backend API.
-- Use PostgreSQL for persistence.
-- Use Drizzle ORM and drizzle-kit.
-- Do not use Prisma unless explicitly requested.
+- Use Expo Router for routing.
+- Use Convex for persistence, backend functions, and realtime client updates.
+- Use Convex queries for reads, mutations for writes, and actions for OpenAI-compatible calls.
+- Do not use PostgreSQL, Drizzle ORM, drizzle-kit, Prisma, or an Express REST API unless explicitly requested later.
 - Use pnpm as the package manager.
-- Deploy primarily to Railway or a similar Node.js-compatible PaaS.
-- Keep OpenAI-compatible API calls on the server.
+- Deploy the Convex backend with Convex tooling.
+- Deploy the web app as a static SPA to any compatible host.
+- Keep OpenAI-compatible API calls in Convex backend actions.
 - Never expose secrets to the Expo client.
 
 ## Non-negotiable Rules
 
-- Do not introduce Prisma.
-- Use Drizzle ORM for database access.
-- Use drizzle-kit for migrations.
+- Use Convex as the database/backend source of truth.
+- Do not introduce PostgreSQL, Drizzle ORM, drizzle-kit, Prisma, or Express for the MVP unless explicitly requested.
 - Never expose `OPENAI_API_KEY` to frontend code.
-- Never expose `DATABASE_URL` to frontend code.
-- Never expose `APP_ACCESS_TOKEN` to frontend code.
+- Never expose backend-only Convex environment variables to frontend code.
 - Only `EXPO_PUBLIC_*` variables may be used in Expo client code.
+- `EXPO_PUBLIC_CONVEX_URL` is frontend-safe and required by the Expo app.
 - AI must not directly write to the database.
 - AI output must be validated before execution.
-- Task operations from AI must use preview → confirmation → execute.
+- Task operations from AI must use preview -> confirmation -> execute.
 - The web app must be deployed as a SPA.
 - Expo Web should use `web.output: 'single'`.
-- Express must serve the web build with an `index.html` fallback.
-- The server must listen on `process.env.PORT`.
-- The server must bind to `0.0.0.0` in production.
+- Convex generated files under `convex/_generated/` should be committed after codegen.
+- Local Convex runtime state (`.convex/`) and local env files must not be committed.
 
 ## Current Project State
 
-Project root:
+The project now contains a pnpm workspace with an Expo/React Native Web app under:
 
 ```txt
-<project-root>
+apps/mobile/
 ```
 
-This is currently a greenfield project.
+The Convex backend lives inside the mobile app project:
 
-Known current files:
+```txt
+apps/mobile/convex/
+```
+
+Important current files:
 
 ```txt
 package.json
-pnpm-lock.yaml
+pnpm-workspace.yaml
+.env.example
+.gitignore
+apps/mobile/package.json
+apps/mobile/app.config.ts
+apps/mobile/app/
+apps/mobile/convex/
+apps/mobile/src/
 ```
-
-The current root `package.json` uses:
-
-```json
-{
-  "type": "module",
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "^11.11.0"
-    }
-  }
-}
-```
-
-Use pnpm for all commands.
 
 ## Target Workspace Layout
 
@@ -84,7 +77,6 @@ Use pnpm for all commands.
 icarun/
   package.json
   pnpm-workspace.yaml
-  railway.json
   .env.example
   .gitignore
   README.md
@@ -96,6 +88,7 @@ icarun/
       tsconfig.json
       babel.config.js
       metro.config.js
+      convex.json
       app/
         _layout.tsx
         index.tsx
@@ -103,41 +96,23 @@ icarun/
           [id].tsx
         settings.tsx
       src/
-        components/
         features/
-          tasks/
           ai/
         lib/
-          api.ts
-          queryClient.ts
+          convex.ts
         theme/
-
-    server/
-      package.json
-      tsconfig.json
-      drizzle.config.ts
-      src/
-        index.ts
-        env.ts
-        db.ts
-        schema/
-          index.ts
-          tasks.ts
-          aiOperationLogs.ts
-        routes/
-          health.ts
-          tasks.ts
-          ai.ts
-        services/
-          taskService.ts
-          openaiClient.ts
-          aiTaskController.ts
-        validators/
-          taskSchemas.ts
+      convex/
+        schema.ts
+        health.ts
+        tasks.ts
+        ai.ts
+        aiInternal.ts
+        lib/
           aiSchemas.ts
-      drizzle/
-        migrations/
-      web-build/
+          openai.ts
+          prompt.ts
+          serializers.ts
+        _generated/
 ```
 
 Avoid adding a shared package at the beginning.
@@ -156,39 +131,34 @@ When working on this project:
 1. Inspect existing files before editing.
 2. Do not assume dependencies are installed.
 3. Use pnpm, not npm or yarn.
-4. Do not introduce Prisma.
-5. Prefer Drizzle and drizzle-kit for all database work.
-6. Keep secrets server-side.
-7. Preserve Railway deployability.
-8. Preserve Expo Web SPA behavior.
-9. Validate API inputs with Zod.
-10. Validate AI outputs with Zod.
-11. Do not execute AI-generated SQL.
-12. Run typecheck/build after implementation when possible.
-13. Explain any migration or deployment-impacting change.
-14. Use absolute Windows paths when referring to local files.
+4. Use Convex for database and backend functions.
+5. Do not introduce PostgreSQL, Drizzle, drizzle-kit, Prisma, or Express unless explicitly requested.
+6. Keep secrets server-side in Convex deployment environment variables.
+7. Preserve Expo Web SPA behavior.
+8. Validate AI outputs with Zod.
+9. Use Convex `v` validators for function arguments and schema definitions.
+10. Do not execute AI-generated SQL.
+11. Run typecheck/build after implementation when possible.
+12. Run Convex codegen/dev validation when possible.
+13. Explain any deployment-impacting change.
+14. Use absolute Windows paths when referring to local files in responses.
+15. Do not commit private local paths, local usernames, local Convex runtime state, or machine-specific generated data.
 
 ## Preferred Implementation Order
 
 If implementing from scratch, proceed in this order:
 
 1. Create pnpm workspace.
-2. Create Express server skeleton.
-3. Add `/api/health`.
-4. Add Drizzle config.
-5. Add Drizzle schema.
-6. Add drizzle-kit migrations.
-7. Add task CRUD API.
-8. Create Expo app.
-9. Connect Expo app to API.
-10. Add Expo Web build output to `apps/server/web-build`.
-11. Add Express static serving and SPA fallback.
-12. Add Railway config.
-13. Add OpenAI-compatible client.
-14. Add AI preview endpoint.
-15. Add AI execute endpoint.
-16. Add AI command UI.
-17. Add simple bearer auth.
-18. Add rate limiting for AI endpoints.
-19. Verify locally.
-20. Prepare Railway deployment notes.
+2. Create Expo app.
+3. Add Convex dependency and configure a Convex deployment.
+4. Add `convex/schema.ts`.
+5. Add health query.
+6. Add task queries/mutations.
+7. Add Expo Router screens.
+8. Connect Expo app to Convex with `ConvexProvider`.
+9. Add AI Zod schemas.
+10. Add OpenAI-compatible Convex action for preview.
+11. Add AI execute action with confirmation checks.
+12. Add AI command UI.
+13. Verify locally with Convex dev/codegen and TypeScript.
+14. Prepare deployment notes for Convex backend and static SPA hosting.

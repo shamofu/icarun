@@ -19,6 +19,7 @@ The app should feel:
 - predictable
 - safe
 - web-first
+- realtime
 - AI-assisted but user-controlled
 
 ## AI Interaction Model
@@ -29,23 +30,23 @@ The expected flow is:
 
 ```txt
 User enters natural language
-  -> App asks server for preview
-  -> Server calls OpenAI-compatible API
-  -> Server validates AI output
+  -> App calls Convex preview action
+  -> Convex action calls OpenAI-compatible API
+  -> Convex action validates AI output
   -> App displays proposed changes
   -> User confirms
-  -> Server executes changes
+  -> Convex execute action applies validated mutations
 ```
 
 ## Safety Principle
 
 The user remains in control.
 
-AI can propose actions, but the server validates them and the user confirms them before execution.
+AI can propose actions, but the backend validates them and the user confirms them before execution.
 
 ## Provider Flexibility
 
-The app should support OpenAI-compatible providers through:
+The app should support OpenAI-compatible providers through Convex deployment environment variables:
 
 ```env
 OPENAI_API_KEY

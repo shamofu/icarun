@@ -2,63 +2,76 @@
 
 ## Current Status
 
-The project is greenfield.
+The project has been migrated from the prior PostgreSQL + Drizzle + Express plan to a Convex-backed architecture.
 
-Current known files:
+Current implemented structure includes:
 
 ```txt
 package.json
 pnpm-lock.yaml
+pnpm-workspace.yaml
+.env.example
+.gitignore
+apps/mobile/
+  app/
+  src/
+  convex/
 ```
 
-No Expo app, Express server, Drizzle schema, or Railway config has been created yet.
+## Recent Changes
+
+- Added pnpm workspace.
+- Added Expo / React Native Web app skeleton.
+- Added Convex backend under `apps/mobile/convex/`.
+- Added Convex schema for `tasks` and `aiOperationLogs`.
+- Added task CRUD Convex queries/mutations.
+- Added health query.
+- Added AI preview/execute Convex actions.
+- Added Zod AI action validation.
+- Added Expo UI screens for task list, task detail, and settings.
+- Added AI command bar using preview -> confirm -> execute.
+- Added ADR 0002: Use Convex.
+- Marked ADR 0001 as superseded.
+- Updated project rules, docs, README, and memory bank for Convex.
+- Updated mobile dependencies to Expo SDK 57-compatible versions.
+- Verified updated dependencies with Expo dependency check, peer check, typecheck, and web build.
 
 ## Current Direction
 
-The project should be designed with Drizzle ORM instead of Prisma.
+Use Convex as the database and backend source of truth.
 
-The main reasons are:
+Main reasons:
 
-- easier PaaS deployment
-- fewer generated artifacts
-- no Prisma query engine binary
-- simpler runtime model
-- enough control for PostgreSQL
-- better fit for Railway-style deployment simplicity
+- user requested Convex
+- realtime updates
+- TypeScript functions
+- no ORM/migration layer
+- simpler AI action model
+- no Express REST API server needed for MVP
 
 ## Immediate Next Steps
 
-When implementation begins:
-
-1. Create pnpm workspace.
-2. Create `apps/server`.
-3. Add Express + TypeScript.
-4. Add `/api/health`.
-5. Add Drizzle + drizzle-kit.
-6. Add database schema.
-7. Add task CRUD API.
-8. Create `apps/mobile`.
-9. Add Expo Router screens.
-10. Connect mobile web app to API.
-11. Add static serving and SPA fallback.
-12. Add Railway config.
-13. Add OpenAI-compatible AI preview.
-14. Add AI execute flow.
-15. Add auth and rate limiting.
+1. Run Convex dev validation if backend functions or generated files change again.
+2. Ensure local runtime state is ignored.
+3. Commit generated Convex files but not local `.convex/` data.
+4. Configure real Convex production deployment.
+5. Set OpenAI-compatible provider env vars on Convex.
+6. Deploy static SPA output to a host with index.html fallback.
+7. Perform a full browser UI smoke test.
 
 ## Open Decisions
 
-- Task ID format: UUID vs CUID/text.
-- Whether status/priority should be PostgreSQL enums or text with validation.
-- Whether `ai_operation_logs` belongs in the initial migration or immediately after CRUD.
-- Whether simple bearer auth is enough for the first deployed MVP.
-- Whether to add `packages/shared` later after the MVP stabilizes.
+- Which static host to use for the Expo Web SPA.
+- Whether to add full authentication later.
+- Whether to add rate limiting / quotas for AI actions.
+- Whether to normalize tags after MVP.
+- Whether to add richer task date parsing / timezone controls.
 
 ## Active Warnings
 
-- Do not use Prisma.
-- Do not expose server secrets to Expo.
+- Do not use PostgreSQL, Drizzle ORM, drizzle-kit, Prisma, or Express unless explicitly requested.
+- Do not expose OpenAI secrets to Expo.
 - Do not use Expo `web.output: 'static'` with dynamic task routes.
-- Do not rely on Railway auto-detection for monorepo commands.
-- Confirm drizzle-kit config syntax against the installed version.
-- Do not commit private local paths, local usernames, personal handles, or machine-specific absolute paths; use repo-relative paths or placeholders such as `<project-root>`.
+- Do not commit local Convex runtime state (`apps/mobile/.convex/`).
+- Do not commit private local env files (`apps/mobile/.env.local`).
+- Convex generated files under `apps/mobile/convex/_generated/` are required for typecheck and should be committed.
