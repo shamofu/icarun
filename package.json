@@ -6,10 +6,14 @@
   "author": "shamofu",
   "license": "MIT",
   "type": "module",
+  "packageManager": "pnpm@11.13.1",
+  "engines": {
+    "node": "24.x"
+  },
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
-      "version": "^11.11.0",
+      "version": "11.13.1",
       "onFail": "download"
     }
   },
@@ -19,6 +23,11 @@
     "convex:dev": "pnpm --filter @icarun/mobile convex:dev",
     "convex:deploy": "pnpm --filter @icarun/mobile convex:deploy",
     "build": "pnpm --filter @icarun/mobile build",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "railway:build": "pnpm --filter @icarun/mobile convex:deploy",
+    "start": "serve apps/mobile/dist --single"
+  },
+  "dependencies": {
+    "serve": "^14.2.6"
   }
 }

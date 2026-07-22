@@ -134,6 +134,52 @@ The static host should serve `index.html` for non-file routes such as:
 /settings
 ```
 
+## Railway Deployment
+
+Railway hosts the Expo Web static SPA from `apps/mobile/dist`. The Convex backend is still deployed to Convex Cloud; Railway only serves the built frontend.
+
+This repository includes `railway.json` for Railway config-as-code:
+
+- build uses Nixpacks and runs `pnpm run railway:build`.
+- `railway:build` runs `pnpm --filter @icarun/mobile convex:deploy`.
+- `convex:deploy` deploys Convex functions and runs the Expo Web export with `EXPO_PUBLIC_CONVEX_URL` set to the production Convex URL.
+- start runs `serve apps/mobile/dist --single`, which serves the SPA and rewrites non-file routes such as `/tasks/<id>` to `index.html`.
+
+### Railway GitHub settings
+
+In Railway, connect the GitHub repository to a service and configure the service source branch to:
+
+```txt
+release
+```
+
+Railway's source branch is a service setting in the Railway dashboard, not a value that can be committed in `railway.json`. Keep the Railway root directory at the repository root so the pnpm workspace and `railway.json` are visible.
+
+### Railway service variables
+
+Set this variable on the Railway service:
+
+```env
+CONVEX_DEPLOY_KEY=prod:your-convex-deploy-key
+```
+
+Generate the production deploy key in the Convex dashboard. Do not set `OPENAI_API_KEY`, `OPENAI_BASE_URL`, or `OPENAI_MODEL` as Expo public variables; those provider secrets belong on the Convex deployment via `npx convex env set ...`.
+
+Railway provides `PORT` automatically. The `serve` package reads `PORT` when no explicit listen port is supplied.
+
+### Deploy flow
+
+```txt
+push to release
+  -> Railway GitHub autodeploy for the release branch
+  -> pnpm install
+  -> pnpm run railway:build
+       -> convex deploy using CONVEX_DEPLOY_KEY
+       -> expo export writes apps/mobile/dist with production EXPO_PUBLIC_CONVEX_URL
+  -> pnpm run start
+       -> serve apps/mobile/dist --single on Railway's PORT
+```
+
 ## Deployment Checklist
 
 Before deployment:
@@ -142,11 +188,15 @@ Before deployment:
 - `pnpm typecheck` succeeds
 - Convex functions are ready via `pnpm --filter @icarun/mobile convex:dev`
 - `pnpm build` succeeds
+- `railway.json` is committed
+- Railway service is connected to the GitHub `release` branch
+- Railway service variable `CONVEX_DEPLOY_KEY` is set
 - `apps/mobile/convex/_generated/` is committed
 - `.env.example` is up to date
 - Convex env vars are configured
 - OpenAI key is not exposed to frontend
 - SPA fallback is configured on the static host
+- Railway start command serves `apps/mobile/dist` with `serve --single`
 
 After deployment:
 

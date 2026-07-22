@@ -31,12 +31,15 @@
 - Basic Convex function runtime checks performed (`health.check`, task create/list/remove, AI confirmation guard).
 - Mobile dependencies updated to Expo SDK 57-compatible versions.
 - Updated dependency set passes Expo dependency check, peer dependency check, TypeScript typecheck, and Expo Web build.
+- Railway config-as-code added for Nixpacks build and SPA start command.
+- Root `railway:build` and `start` scripts added.
+- `serve` dependency added to host `apps/mobile/dist` with SPA fallback.
 
 ## Not Started / Remaining
 
 - Real production Convex deployment setup.
 - Production OpenAI-compatible env var configuration.
-- Static SPA host selection and deployment.
+- Railway service setup: connect GitHub repo, set source branch to `release`, set `CONVEX_DEPLOY_KEY`, and run first deploy.
 - Full browser UI smoke test after Expo SDK 57 dependency update.
 - Real AI preview call with a configured `OPENAI_API_KEY`.
 - Authentication.
@@ -78,6 +81,17 @@ Mitigation:
 - retry without `response_format`
 - always parse JSON
 - always validate with Zod
+
+### Railway release deployment
+
+The repo config can define Railway build/start behavior, but the GitHub source branch is configured in Railway service settings.
+
+Mitigation:
+
+- set Railway service source branch to `release`
+- keep Railway root directory at the repository root
+- set Railway service variable `CONVEX_DEPLOY_KEY`
+- ensure `railway.json`, `package.json`, and `pnpm-lock.yaml` are committed to the `release` branch
 
 ### Expo dynamic route refresh
 

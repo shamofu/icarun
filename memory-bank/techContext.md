@@ -64,6 +64,8 @@ The static host should:
 - serve the Expo Web build output
 - support `index.html` fallback for dynamic routes
 
+Railway release deployment is configured with `railway.json` at the repository root. Railway uses Nixpacks, runs `pnpm run railway:build`, then starts `pnpm run start`. The Railway service source branch must be set to `release` in Railway.
+
 ## Environment Variables
 
 Frontend-safe:
@@ -80,7 +82,13 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4.1-mini
 ```
 
-Never expose these to the frontend:
+Railway service variable for production deploy/build:
+
+```env
+CONVEX_DEPLOY_KEY=prod:your-convex-deploy-key
+```
+
+Never expose these to the frontend or Railway frontend build as public Expo variables:
 
 ```env
 OPENAI_API_KEY
@@ -98,7 +106,9 @@ OPENAI_MODEL
     "convex:dev": "pnpm --filter @icarun/mobile convex:dev",
     "convex:deploy": "pnpm --filter @icarun/mobile convex:deploy",
     "build": "pnpm --filter @icarun/mobile build",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "railway:build": "pnpm --filter @icarun/mobile convex:deploy",
+    "start": "serve apps/mobile/dist --single"
   }
 }
 ```

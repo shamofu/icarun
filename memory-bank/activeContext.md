@@ -35,6 +35,8 @@ apps/mobile/
 - Updated project rules, docs, README, and memory bank for Convex.
 - Updated mobile dependencies to Expo SDK 57-compatible versions.
 - Verified updated dependencies with Expo dependency check, peer check, typecheck, and web build.
+- Added Railway deployment config for release-branch GitHub autodeploy.
+- Added root Railway build/start scripts and `serve` for SPA hosting.
 
 ## Current Direction
 
@@ -56,12 +58,13 @@ Main reasons:
 3. Commit generated Convex files but not local `.convex/` data.
 4. Configure real Convex production deployment.
 5. Set OpenAI-compatible provider env vars on Convex.
-6. Deploy static SPA output to a host with index.html fallback.
-7. Perform a full browser UI smoke test.
+6. Configure Railway GitHub service branch to `release` and set `CONVEX_DEPLOY_KEY`.
+7. Push the release branch and verify Railway deploy logs.
+8. Perform a full browser UI smoke test.
 
 ## Open Decisions
 
-- Which static host to use for the Expo Web SPA.
+- Railway is the selected static SPA host for release-branch deployment.
 - Whether to add full authentication later.
 - Whether to add rate limiting / quotas for AI actions.
 - Whether to normalize tags after MVP.
@@ -75,3 +78,5 @@ Main reasons:
 - Do not commit local Convex runtime state (`apps/mobile/.convex/`).
 - Do not commit private local env files (`apps/mobile/.env.local`).
 - Convex generated files under `apps/mobile/convex/_generated/` are required for typecheck and should be committed.
+- Railway cannot read the release branch trigger from `railway.json`; set the service source branch to `release` in Railway.
+- Railway requires `CONVEX_DEPLOY_KEY` as a service variable for `convex deploy` during build.
