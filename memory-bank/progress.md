@@ -36,6 +36,7 @@
 - `serve` dependency added to host `apps/mobile/dist` with SPA fallback.
 - Railway Node runtime pinned to Node.js 22 LTS via `engines.node` and `.nvmrc`.
 - Root top-level `packageManager` removed so Nixpacks detects pnpm from `pnpm-lock.yaml` instead of using the Corepack shim that failed on Railway Node 24.10.0.
+- pnpm 11 `devEngines.packageManager` removed and `pnpm-lock.yaml` regenerated as a single YAML document after Railway pnpm 9 rejected the multi-document lockfile.
 
 ## Not Started / Remaining
 
@@ -93,7 +94,17 @@ Mitigation:
 - remove the root top-level `packageManager` field so Nixpacks detects pnpm from `pnpm-lock.yaml` instead of Corepack
 - pin Railway/Nixpacks to Node.js 22 LTS with `package.json` `engines.node: 22.x`
 - add `.nvmrc` with `22`
-- keep `devEngines.packageManager` as pnpm metadata for local pnpm 11 behavior
+- do not use pnpm 11 `devEngines.packageManager` while Railway is using detected `pnpm-9_x`, because it can add lockfile metadata that pnpm 9 cannot parse
+
+### Railway pnpm 9 broken lockfile
+
+Railway/Nixpacks selected `pnpm-9_x` and then failed with `ERR_PNPM_BROKEN_LOCKFILE: expected a single document in the stream, but found more`. The lockfile contained two YAML documents because pnpm 11 `devEngines.packageManager` metadata had been written at the top.
+
+Mitigation:
+
+- remove root `devEngines.packageManager`
+- regenerate `pnpm-lock.yaml` so it has only one YAML document and no extra `---` separators
+- allow Railway to use detected `pnpm-9_x` for now (`engines.pnpm: >=9 <12`)
 
 ### Railway release deployment
 

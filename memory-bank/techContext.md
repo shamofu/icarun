@@ -4,7 +4,7 @@
 
 Use Node.js for local tooling and Expo/Convex development.
 
-Railway/Nixpacks runtime is pinned to Node.js 22 LTS (`engines.node: 22.x` and `.nvmrc: 22`). The root `package.json` intentionally omits the legacy top-level `packageManager` field so Nixpacks detects pnpm from `pnpm-lock.yaml` instead of using Corepack.
+Railway/Nixpacks runtime is pinned to Node.js 22 LTS (`engines.node: 22.x` and `.nvmrc: 22`). The root `package.json` intentionally omits both the legacy top-level `packageManager` field and pnpm 11 `devEngines.packageManager` so Nixpacks uses its detected `pnpm-9_x` package and the lockfile stays pnpm-9-readable.
 
 Current local environment has been verified with:
 
@@ -66,7 +66,7 @@ The static host should:
 - serve the Expo Web build output
 - support `index.html` fallback for dynamic routes
 
-Railway release deployment is configured with `railway.json` at the repository root. Railway uses Nixpacks on Node.js 22 LTS, installs with pnpm detected from `pnpm-lock.yaml`, runs `pnpm run railway:build`, then starts `pnpm run start`. The Railway service source branch must be set to `release` in Railway.
+Railway release deployment is configured with `railway.json` at the repository root. Railway uses Nixpacks on Node.js 22 LTS with detected `pnpm-9_x`, installs from a single-document `pnpm-lock.yaml`, runs `pnpm run railway:build`, then starts `pnpm run start`. The Railway service source branch must be set to `release` in Railway.
 
 ## Environment Variables
 
@@ -139,4 +139,4 @@ Generated files under `apps/mobile/convex/_generated/` should be committed.
 Local files under `apps/mobile/.convex/` and `apps/mobile/.env.local` should not be committed.
 ## Railway pnpm/Corepack Note
 
-Do not add the legacy top-level `packageManager` field back to the root `package.json` without re-validating Railway. In the failed Railway build, that field caused Nixpacks to launch pnpm through Corepack, and the Corepack shim bundled with Node 24.10.0 crashed before dependency installation. Keep `devEngines.packageManager` for pnpm metadata and rely on `pnpm-lock.yaml` for Nixpacks pnpm detection.
+Do not add the legacy top-level `packageManager` field or pnpm 11 `devEngines.packageManager` back to the root `package.json` without re-validating Railway. The top-level `packageManager` previously routed pnpm through Corepack, and `devEngines.packageManager` caused pnpm 11 to write an extra `packageManagerDependencies` YAML document that Railway pnpm 9 rejected with `ERR_PNPM_BROKEN_LOCKFILE`.

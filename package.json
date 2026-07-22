@@ -7,14 +7,8 @@
   "license": "MIT",
   "type": "module",
   "engines": {
-    "node": "22.x"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "11.13.1",
-      "onFail": "download"
-    }
+    "node": "22.x",
+    "pnpm": ">=9 <12"
   },
   "scripts": {
     "dev": "pnpm --filter @icarun/mobile dev",
