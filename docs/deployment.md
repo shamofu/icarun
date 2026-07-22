@@ -140,6 +140,8 @@ Railway hosts the Expo Web static SPA from `apps/mobile/dist`. The Convex backen
 
 This repository includes `railway.json` for Railway config-as-code:
 
+The build runtime is pinned to Node.js 22 LTS via `package.json` `engines.node` and `.nvmrc`. The root `package.json` intentionally omits the legacy top-level `packageManager` field so Nixpacks detects pnpm from `pnpm-lock.yaml` instead of launching pnpm through the Corepack shim that failed on Railway Node 24.10.0.
+
 - build uses Nixpacks and runs `pnpm run railway:build`.
 - `railway:build` runs `pnpm --filter @icarun/mobile convex:deploy`.
 - `convex:deploy` deploys Convex functions and runs the Expo Web export with `EXPO_PUBLIC_CONVEX_URL` set to the production Convex URL.
@@ -185,6 +187,9 @@ push to release
 Before deployment:
 
 - `pnpm install` succeeds
+- `package.json` pins `engines.node` to `22.x`
+- `.nvmrc` contains `22`
+- root `package.json` has no top-level `packageManager` field
 - `pnpm typecheck` succeeds
 - Convex functions are ready via `pnpm --filter @icarun/mobile convex:dev`
 - `pnpm build` succeeds

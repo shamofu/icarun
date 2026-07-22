@@ -37,6 +37,8 @@ apps/mobile/
 - Verified updated dependencies with Expo dependency check, peer check, typecheck, and web build.
 - Added Railway deployment config for release-branch GitHub autodeploy.
 - Added root Railway build/start scripts and `serve` for SPA hosting.
+- Pinned Railway/Nixpacks Node runtime to Node.js 22 LTS.
+- Removed the root top-level `packageManager` field so Railway/Nixpacks avoids the Corepack pnpm shim that failed on Node 24.10.0.
 
 ## Current Direction
 
@@ -80,3 +82,6 @@ Main reasons:
 - Convex generated files under `apps/mobile/convex/_generated/` are required for typecheck and should be committed.
 - Railway cannot read the release branch trigger from `railway.json`; set the service source branch to `release` in Railway.
 - Railway requires `CONVEX_DEPLOY_KEY` as a service variable for `convex deploy` during build.
+- Railway uses pnpm-lock.yaml detection for pnpm; avoid the legacy top-level `packageManager` field in root package.json.
+
+- Do not reintroduce the root top-level `packageManager` field without re-validating Railway install logs; it can route pnpm through Corepack.

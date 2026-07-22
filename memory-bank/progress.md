@@ -34,6 +34,8 @@
 - Railway config-as-code added for Nixpacks build and SPA start command.
 - Root `railway:build` and `start` scripts added.
 - `serve` dependency added to host `apps/mobile/dist` with SPA fallback.
+- Railway Node runtime pinned to Node.js 22 LTS via `engines.node` and `.nvmrc`.
+- Root top-level `packageManager` removed so Nixpacks detects pnpm from `pnpm-lock.yaml` instead of using the Corepack shim that failed on Railway Node 24.10.0.
 
 ## Not Started / Remaining
 
@@ -81,6 +83,17 @@ Mitigation:
 - retry without `response_format`
 - always parse JSON
 - always validate with Zod
+
+### Railway Corepack pnpm startup
+
+Railway previously selected Node 24.10.0 and failed before dependency installation while Corepack launched pnpm 11.13.1 with `ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING`. The failing stack was inside Corepack and `/root/.cache/node/corepack/pnpm/11.13.1/bin/pnpm.cjs`, before app code ran.
+
+Mitigation:
+
+- remove the root top-level `packageManager` field so Nixpacks detects pnpm from `pnpm-lock.yaml` instead of Corepack
+- pin Railway/Nixpacks to Node.js 22 LTS with `package.json` `engines.node: 22.x`
+- add `.nvmrc` with `22`
+- keep `devEngines.packageManager` as pnpm metadata for local pnpm 11 behavior
 
 ### Railway release deployment
 
