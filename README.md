@@ -2,14 +2,15 @@
 
 icarun is a task management application inspired by Bluesky's Expo / React Native / React Native Web architecture.
 
-The app is now designed as a Convex-backed SPA deployed from a pnpm workspace to Railway services:
+The app is designed as a Convex-backed SPA deployed from a pnpm workspace to Railway services:
 
 ```txt
 Expo / React Native Web SPA
         |
-        | convex/react
+        | convex/react + Better Auth client
         v
 Self-hosted Convex backend on Railway
+        +--> Better Auth HTTP routes (/api/auth/*)
         +--> PostgreSQL persistence used internally by Convex
         +--> Convex actions for OpenAI-compatible Chat Completions API
 ```
@@ -18,23 +19,24 @@ Self-hosted Convex backend on Railway
 
 - Build a deployable task management MVP.
 - Use Expo + React Native Web for the frontend.
-- Use Convex for persistence, backend functions, and realtime updates.
+- Use Convex for persistence, backend functions, realtime updates, and auth integration.
+- Support Better Auth email/password accounts with per-user task isolation.
 - Support OpenAI-compatible providers for natural language task control.
 - Keep all secrets server-side in Convex deployment environment variables.
 - Keep the web app deployable as an SPA.
 
 ## Why Convex
 
-Convex replaces the previous PostgreSQL + Drizzle + Express plan. It provides:
+Convex replaces the previous PostgreSQL + Drizzle + Express application plan. It provides:
 
 - a realtime database
 - TypeScript backend functions
-- queries, mutations, and actions
+- queries, mutations, actions, and HTTP routes
 - generated end-to-end types
 - simple client integration via `convex/react`
-- server-side environment variables for AI provider secrets
+- server-side environment variables for AI and auth secrets
 
-Because Convex supplies the backend function layer, the MVP does not need an Express REST API server, Drizzle ORM, drizzle-kit migrations, Prisma, or a `DATABASE_URL`.
+PostgreSQL is only used internally by self-hosted Convex and is not accessed by application code.
 
 ## Workspace Layout
 
@@ -70,6 +72,7 @@ The frontend uses:
 - Expo Router
 - TypeScript
 - Convex React client
+- Better Auth (`@convex-dev/better-auth` + `better-auth` + `@better-auth/expo`)
 
 Expo Web is built as a SPA:
 
@@ -90,10 +93,11 @@ The backend lives in:
 apps/mobile/convex/
 ```
 
-Important functions:
+Important functions/routes:
 
 ```txt
 api.health.check
+api.auth.getCurrentUser
 api.tasks.list
 api.tasks.get
 api.tasks.create
@@ -101,6 +105,7 @@ api.tasks.update
 api.tasks.remove
 api.ai.preview
 api.ai.execute
+HTTP /api/auth/* via convex/http.ts
 ```
 
 The Convex schema is defined in:
@@ -108,6 +113,8 @@ The Convex schema is defined in:
 ```txt
 apps/mobile/convex/schema.ts
 ```
+
+Tasks now store `ownerId` and all task CRUD operations require an authenticated Convex identity. Existing pre-auth tasks without `ownerId` are intentionally hidden after account mode is enabled.
 
 ## AI Safety Model
 
@@ -126,27 +133,30 @@ User command
   -> server validates again and runs Convex mutations
 ```
 
-AI output must be parsed and validated with Zod before execution.
+AI preview/execute require authentication and only use the current user's tasks as LLM context.
 
 ## Environment
 
-Frontend-safe value:
+Frontend-safe values:
 
 ```env
 EXPO_PUBLIC_CONVEX_URL=http://127.0.0.1:3210
+EXPO_PUBLIC_CONVEX_SITE_URL=http://127.0.0.1:3211
 ```
 
-This is written to `apps/mobile/.env.local` by `npx convex dev` for local development.
+`EXPO_PUBLIC_CONVEX_URL` is the Convex API origin. `EXPO_PUBLIC_CONVEX_SITE_URL` is the Convex HTTP/site origin used by Better Auth `/api/auth/*` routes.
 
-Server-only values must be set on the Convex deployment, not in Expo client code:
+Server-only values must be set on the Convex deployment/backend, not in Expo client code:
 
 ```bash
 npx convex env set OPENAI_API_KEY sk-your-key
 npx convex env set OPENAI_BASE_URL https://api.openai.com/v1
 npx convex env set OPENAI_MODEL gpt-4.1-mini
+npx convex env set BETTER_AUTH_SECRET <long-random-secret>
+npx convex env set SITE_URL <frontend-origin>
 ```
 
-Never expose `OPENAI_API_KEY` to frontend code.
+Never expose `OPENAI_API_KEY`, `BETTER_AUTH_SECRET`, or `CONVEX_SELF_HOSTED_ADMIN_KEY` to frontend code.
 
 ## Development
 
@@ -196,7 +206,6 @@ apps/mobile/dist
 
 Host that directory with any static hosting provider that supports SPA fallback to `index.html`.
 
-
 ## Railway Monorepo Services
 
 Docker Compose is not used for Railway deployment. This repository is a pnpm workspace that manages all Railway services from one GitHub repository:
@@ -208,17 +217,14 @@ Docker Compose is not used for Railway deployment. This repository is a pnpm wor
 @icarun/database           -> PostgreSQL image wrapper for Convex persistence
 ```
 
-Railway `railway.json` config-as-code applies to one service/deployment, so each deployable service has its own config file:
+Better Auth adds one important Railway requirement: the self-hosted Convex backend serves API traffic on port `3210` and HTTP actions on port `3211`. The app needs public browser-reachable origins for both:
 
-```txt
-railway.json
-apps/mobile/railway.json
-services/convex-backend/railway.json
-services/convex-dashboard/railway.json
-services/database/railway.json
+```env
+EXPO_PUBLIC_CONVEX_URL=https://<convex-api-public-domain>       # routes to 3210
+EXPO_PUBLIC_CONVEX_SITE_URL=https://<convex-site-public-domain> # routes to 3211
 ```
 
-Create separate Railway services from the same repository and point each service at the matching config file path. PostgreSQL is only used internally by self-hosted Convex; application code continues to use Convex queries, mutations, and actions. See `docs/deployment.md` for Railway reference variable wiring, `PGDATA=/var/lib/postgresql/data/pgdata`, `PORT=3210`, and public-vs-private domain rules.
+Expose both origins from the single `convex-backend` service: in its Railway Public Networking section, generate one domain targeting port `3210` (API) and one targeting port `3211` (HTTP actions / Better Auth). See `docs/deployment.md` for the full Railway variable list.
 
 ## Documentation
 
@@ -234,4 +240,4 @@ Important docs:
 
 ## Current State
 
-The project now includes a working Expo + Convex MVP skeleton with task CRUD, AI preview/execute functions, and local Convex validation.
+The project now includes an Expo + Convex MVP with Better Auth email/password accounts, per-user task isolation, task CRUD, AI preview/execute functions, and local Convex validation.

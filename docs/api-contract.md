@@ -2,16 +2,19 @@
 
 This document defines the initial icarun backend contract.
 
-The previous HTTP REST API contract has been replaced by Convex functions.
+The previous HTTP REST API contract has been replaced by Convex functions plus Better Auth HTTP routes.
 
 ## General Rules
 
 - Frontend calls Convex functions through `convex/react`.
+- Better Auth signs users in/out through `/api/auth/*` on the Convex HTTP/site origin.
 - Reads use queries.
 - Writes use mutations.
 - External side effects such as OpenAI-compatible provider calls use actions.
 - Function arguments are validated with Convex `v` validators.
 - AI output is validated with Zod.
+- Task and AI functions require authentication unless explicitly noted.
+- Tasks are scoped by `ownerId`; users cannot read or mutate other users' tasks.
 
 ## Error Shape
 
@@ -46,9 +49,25 @@ type Task = {
 }
 ```
 
+`ownerId` is stored server-side and intentionally not exposed in the app-facing `Task` shape.
+
+## Auth Routes / Functions
+
+Better Auth HTTP routes are registered in `convex/http.ts`:
+
+```txt
+/api/auth/*
+```
+
+The current user can be read from Convex:
+
+```txt
+api.auth.getCurrentUser
+```
+
 ## api.health.check
 
-Returns backend status.
+Returns backend status. Does not require authentication.
 
 ### Arguments
 
@@ -64,7 +83,7 @@ Returns backend status.
 
 ## api.tasks.list
 
-Returns task list.
+Returns the authenticated user's task list.
 
 ### Arguments
 
@@ -83,9 +102,11 @@ Returns task list.
 Task[]
 ```
 
+Throws `FORBIDDEN` if unauthenticated.
+
 ## api.tasks.get
 
-Returns a single task or null.
+Returns a single task or null. Returns null for tasks owned by another user.
 
 ### Arguments
 
@@ -99,9 +120,11 @@ Returns a single task or null.
 Task | null
 ```
 
+Throws `FORBIDDEN` if unauthenticated.
+
 ## api.tasks.create
 
-Creates a task.
+Creates a task owned by the authenticated user.
 
 ### Arguments
 
@@ -121,9 +144,11 @@ Creates a task.
 Task
 ```
 
+Throws `FORBIDDEN` if unauthenticated.
+
 ## api.tasks.update
 
-Updates a task.
+Updates an authenticated user's own task.
 
 ### Arguments
 
@@ -145,11 +170,11 @@ Updates a task.
 Task
 ```
 
-Throws `NOT_FOUND` if the task does not exist.
+Throws `FORBIDDEN` if unauthenticated. Throws `NOT_FOUND` if the task does not exist or belongs to another user.
 
 ## api.tasks.remove
 
-Deletes a task.
+Deletes an authenticated user's own task.
 
 ### Arguments
 
@@ -163,13 +188,13 @@ Deletes a task.
 { ok: true }
 ```
 
-Throws `NOT_FOUND` if the task does not exist.
+Throws `FORBIDDEN` if unauthenticated. Throws `NOT_FOUND` if the task does not exist or belongs to another user.
 
 ## api.ai.preview
 
-Creates a preview of AI-proposed task operations.
+Creates a preview of AI-proposed task operations for the authenticated user.
 
-This action must not mutate tasks.
+This action must not mutate tasks and must only include the authenticated user's tasks in LLM context.
 
 ### Arguments
 
@@ -187,9 +212,11 @@ This action must not mutate tasks.
 }
 ```
 
+Throws `FORBIDDEN` if unauthenticated.
+
 ## api.ai.execute
 
-Executes previously previewed and validated AI actions.
+Executes previously previewed and validated AI actions for the authenticated user.
 
 ### Arguments
 
@@ -209,13 +236,14 @@ Executes previously previewed and validated AI actions.
 }
 ```
 
+Throws `FORBIDDEN` if unauthenticated or not confirmed. Throws `NOT_FOUND` for update/delete targets that do not exist or belong to another user.
+
 ## AI Execution Safety
 
 Before execution:
 
 - validate actions with Zod
 - reject unknown action types
-- verify task existence for update/delete
-- require confirmation for delete actions
-- require confirmation for bulk actions
-- log operation where possible
+- verify task existence and ownership for update/delete
+- require confirmation for all AI actions
+- log operation status where possible

@@ -14,69 +14,82 @@ Railway project
   database           -> @icarun/database
 ```
 
-The app still uses Convex as the application backend/database API. PostgreSQL is only the persistence layer for the self-hosted Convex backend; application code must not use PostgreSQL directly and must not add Drizzle, Prisma, or Express.
+The app uses Convex as the application backend/database API. PostgreSQL is only the persistence layer for self-hosted Convex; application code must not use PostgreSQL directly and must not add Drizzle, Prisma, or Express.
 
-## Why there are multiple railway.json files
+## Better Auth / HTTP Actions Requirement
 
-Railway config-as-code (`railway.json`) configures a single Railway service/deployment. It is not a multi-service manifest. To manage all services in one repository, this project uses pnpm workspace packages and a service-specific `railway.json` in each deployable package:
+Better Auth is mounted through `apps/mobile/convex/http.ts` and serves `/api/auth/*` from the Convex HTTP/site origin.
+
+Self-hosted Convex listens on two ports:
 
 ```txt
-railway.json                                  # frontend default / backwards-compatible root config
-apps/mobile/railway.json                     # frontend service config
-services/convex-backend/railway.json         # Convex backend service config
-services/convex-dashboard/railway.json       # Convex dashboard service config
-services/database/railway.json               # PostgreSQL service config
+3210 -> Convex API / websocket / queries / mutations / actions
+3211 -> Convex HTTP actions / site routes, including Better Auth /api/auth/*
 ```
 
-When creating each Railway service, set the service's config file path to the matching file above. Keep the service root directory at the repository root for this shared pnpm workspace unless Railway's UI requires otherwise. Watch patterns in each config prevent unrelated changes from triggering every service.
+Railway must expose browser-reachable public URLs for both origins:
 
+```env
+EXPO_PUBLIC_CONVEX_URL=https://<convex-api-public-domain>       # routes to 3210
+EXPO_PUBLIC_CONVEX_SITE_URL=https://<convex-site-public-domain> # routes to 3211
+```
+
+A single `convex-backend` Railway service exposes BOTH origins. In the service Public Networking section, generate two domains: one with target port `3210` (the API origin) and one with target port `3211` (the HTTP actions / Better Auth origin). Keep the healthcheck on the `3210` API origin (`/version`).
 
 ## Railway Reference Variables
 
-Railway variables can reference other variables with template syntax such as `${{ NAMESPACE.VAR }}`. In this project, use the Railway UI autocomplete when possible because `NAMESPACE` must match the actual service name. The examples below assume the services are named `database`, `convex-backend`, `convex-dashboard`, and `frontend`.
-
-Recommended mapping:
+The examples below assume service names `database`, `convex-backend`, `convex-dashboard`, and `frontend`. Use Railway UI autocomplete for actual reference names.
 
 ```env
-# database service: direct values
+# database service
 POSTGRES_USER=convex
 POSTGRES_PASSWORD=replace-with-db-password
 POSTGRES_DB=convex_self_hosted
 PGDATA=/var/lib/postgresql/data/pgdata
 
-# convex-backend service: reference database private networking and its own public domain
+# convex-backend service
 PORT=3210
+INSTANCE_SECRET=replace-with-a-long-random-secret
+INSTANCE_NAME=convex-self-hosted
 POSTGRES_URL=postgresql://${{ database.POSTGRES_USER }}:${{ database.POSTGRES_PASSWORD }}@${{ database.RAILWAY_PRIVATE_DOMAIN }}:5432
-CONVEX_CLOUD_ORIGIN=https://${{ RAILWAY_PUBLIC_DOMAIN }}
-CONVEX_SITE_ORIGIN=https://${{ RAILWAY_PUBLIC_DOMAIN }}
+DO_NOT_REQUIRE_SSL=1
+CONVEX_CLOUD_ORIGIN=https://<convex-api-public-domain>
+CONVEX_SITE_ORIGIN=https://<convex-site-public-domain>
+CONVEX_SITE_URL=https://<convex-site-public-domain>
+BETTER_AUTH_SECRET=replace-with-long-random-secret
+SITE_URL=https://<frontend-public-domain>
+EXPO_APP_SCHEME=icarun
+DISABLE_METRICS_ENDPOINT=true
+RUST_LOG=info
+OPENAI_API_KEY=sk-your-key
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4.1-mini
 
-# convex-dashboard service: browser-facing dashboard points at the public backend URL
-NEXT_PUBLIC_DEPLOYMENT_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
+# convex-dashboard service
+NEXT_PUBLIC_DEPLOYMENT_URL=https://<convex-api-public-domain>
 
-# frontend service: browser-facing app points at the public backend URL
-EXPO_PUBLIC_CONVEX_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
-CONVEX_SELF_HOSTED_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
+# frontend service
+EXPO_PUBLIC_CONVEX_URL=https://<convex-api-public-domain>
+EXPO_PUBLIC_CONVEX_SITE_URL=https://<convex-site-public-domain>
+SITE_URL=https://<frontend-public-domain>
+CONVEX_SELF_HOSTED_URL=https://<convex-api-public-domain>
 CONVEX_SELF_HOSTED_ADMIN_KEY=${{ shared.CONVEX_SELF_HOSTED_ADMIN_KEY }}
 ```
 
-`CONVEX_SELF_HOSTED_ADMIN_KEY` is generated after the backend is running with `./generate_admin_key.sh`. It may be pasted directly into the frontend service, but a sealed Railway shared variable is preferred so the key is not visible in the UI after creation.
+`CONVEX_SELF_HOSTED_ADMIN_KEY` is generated after the backend is running with `./generate_admin_key.sh`. It may be pasted directly into the frontend service, but a sealed Railway shared variable is preferred.
 
 Public vs private domain rule:
 
-- Use `RAILWAY_PUBLIC_DOMAIN` for anything used by browsers or bundled frontend code: `EXPO_PUBLIC_CONVEX_URL`, `CONVEX_SELF_HOSTED_URL`, `NEXT_PUBLIC_DEPLOYMENT_URL`, `CONVEX_CLOUD_ORIGIN`, and `CONVEX_SITE_ORIGIN`.
-- Use `RAILWAY_PRIVATE_DOMAIN` only for server-to-server communication inside Railway, currently `convex-backend` -> `database` in `POSTGRES_URL`.
-- Never use `RAILWAY_PRIVATE_DOMAIN` in Expo client variables because user browsers cannot resolve `*.railway.internal` names.
+- Use public URLs for all browser/client-facing values.
+- Use `RAILWAY_PRIVATE_DOMAIN` only for server-to-server database traffic in `POSTGRES_URL`.
+- Never use `RAILWAY_PRIVATE_DOMAIN` in Expo client variables.
 - Do not append the database name to `POSTGRES_URL`; Convex derives `convex_self_hosted` from `INSTANCE_NAME=convex-self-hosted`.
 
 ## Service Details
 
 ### frontend
 
-Workspace package:
-
-```txt
-@icarun/mobile
-```
+Workspace package: `@icarun/mobile`
 
 Config file:
 
@@ -96,25 +109,21 @@ Start command:
 pnpm run railway:start:frontend
 ```
 
-The build command runs Convex deploy for the self-hosted deployment and exports the Expo Web SPA to `apps/mobile/dist`.
-
 Required variables:
 
 ```env
-EXPO_PUBLIC_CONVEX_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
-CONVEX_SELF_HOSTED_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
+EXPO_PUBLIC_CONVEX_URL=https://<convex-api-public-domain>
+EXPO_PUBLIC_CONVEX_SITE_URL=https://<convex-site-public-domain>
+SITE_URL=https://<frontend-public-domain>
+CONVEX_SELF_HOSTED_URL=https://<convex-api-public-domain>
 CONVEX_SELF_HOSTED_ADMIN_KEY=${{ shared.CONVEX_SELF_HOSTED_ADMIN_KEY }}
 ```
 
-`EXPO_PUBLIC_CONVEX_URL` is frontend-safe and is bundled into the client. It must use the backend public domain because browser clients cannot resolve Railway private domains. `CONVEX_SELF_HOSTED_ADMIN_KEY` is a build/deploy secret and must never be exposed to frontend code. You may paste the generated admin key directly or store it as a sealed shared variable referenced from the frontend service.
+`EXPO_PUBLIC_CONVEX_URL` and `EXPO_PUBLIC_CONVEX_SITE_URL` are bundled into the client and are not secrets. `CONVEX_SELF_HOSTED_ADMIN_KEY` is a build/deploy secret and must never be exposed to frontend code.
 
 ### convex-backend
 
-Workspace package:
-
-```txt
-@icarun/convex-backend
-```
+Workspace package: `@icarun/convex-backend`
 
 Config file:
 
@@ -128,7 +137,7 @@ Image wrapper:
 ghcr.io/get-convex/convex-backend:latest
 ```
 
-Generate a public Railway domain for the backend service and set that domain's Public Networking target port to `3210`. Convex listens on port `3210` for the API and on `3211` for HTTP actions; the app uses the `3210` API URL. Attach a Railway volume to the backend service at `/convex/data` for Convex local runtime/storage data.
+In this single service Public Networking section, generate two public domains: one with target port `3210` (API origin, used for `CONVEX_CLOUD_ORIGIN` / `EXPO_PUBLIC_CONVEX_URL`) and one with target port `3211` (HTTP actions / Better Auth origin, used for `CONVEX_SITE_ORIGIN` / `CONVEX_SITE_URL` / `EXPO_PUBLIC_CONVEX_SITE_URL`). Attach a Railway volume to `/convex/data`.
 
 Required variables:
 
@@ -138,8 +147,12 @@ INSTANCE_SECRET=replace-with-a-long-random-secret
 INSTANCE_NAME=convex-self-hosted
 POSTGRES_URL=postgresql://${{ database.POSTGRES_USER }}:${{ database.POSTGRES_PASSWORD }}@${{ database.RAILWAY_PRIVATE_DOMAIN }}:5432
 DO_NOT_REQUIRE_SSL=1
-CONVEX_CLOUD_ORIGIN=https://${{ RAILWAY_PUBLIC_DOMAIN }}
-CONVEX_SITE_ORIGIN=https://${{ RAILWAY_PUBLIC_DOMAIN }}
+CONVEX_CLOUD_ORIGIN=https://<convex-api-public-domain>
+CONVEX_SITE_ORIGIN=https://<convex-site-public-domain>
+CONVEX_SITE_URL=https://<convex-site-public-domain>
+BETTER_AUTH_SECRET=replace-with-long-random-secret
+SITE_URL=https://<frontend-public-domain>
+EXPO_APP_SCHEME=icarun
 DISABLE_METRICS_ENDPOINT=true
 RUST_LOG=info
 OPENAI_API_KEY=sk-your-key
@@ -147,7 +160,7 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4.1-mini
 ```
 
-Convex requires `POSTGRES_URL` without the database name or query parameters. With `INSTANCE_NAME=convex-self-hosted`, the Convex database name is `convex_self_hosted`. `PORT=3210` and a Public Networking target port of `3210` keep Railway healthchecks and the public Convex API pointed at the correct listener. The `/version` endpoint may return the literal text `unknown`; that is acceptable as long as the HTTP status is 200 and Railway marks the deployment healthy.
+Convex requires `POSTGRES_URL` without database name or query parameters. `BETTER_AUTH_SECRET` should be a stable high-entropy secret, e.g. `openssl rand -base64 32`.
 
 After first deploy, generate an admin key:
 
@@ -156,15 +169,9 @@ railway ssh
 ./generate_admin_key.sh
 ```
 
-Store the generated key in the frontend service as `CONVEX_SELF_HOSTED_ADMIN_KEY` and use it to log into the dashboard.
-
 ### convex-dashboard
 
-Workspace package:
-
-```txt
-@icarun/convex-dashboard
-```
+Workspace package: `@icarun/convex-dashboard`
 
 Config file:
 
@@ -172,40 +179,20 @@ Config file:
 services/convex-dashboard/railway.json
 ```
 
-Image wrapper:
-
-```txt
-ghcr.io/get-convex/convex-dashboard:latest
-```
-
-Generate a public Railway domain for the dashboard service.
-
 Required variables:
 
 ```env
-NEXT_PUBLIC_DEPLOYMENT_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
+NEXT_PUBLIC_DEPLOYMENT_URL=https://<convex-api-public-domain>
 ```
-
-Open the dashboard URL and enter the admin key generated from the backend service.
 
 ### database
 
-Workspace package:
-
-```txt
-@icarun/database
-```
+Workspace package: `@icarun/database`
 
 Config file:
 
 ```txt
 services/database/railway.json
-```
-
-Image wrapper:
-
-```txt
-postgres:17
 ```
 
 Attach a Railway volume at:
@@ -223,37 +210,31 @@ POSTGRES_DB=convex_self_hosted
 PGDATA=/var/lib/postgresql/data/pgdata
 ```
 
-Do not expose this service publicly unless needed for emergency maintenance. Keep it on Railway private networking for application use. `PGDATA` must point to a subdirectory under the mounted volume; mounting Railway volumes directly as the PostgreSQL data directory can create a `lost+found` entry and cause `initdb: directory exists but is not empty`.
-
 ## Deployment Order
 
 1. Create/deploy the database service, attach its volume at `/var/lib/postgresql/data`, and set `PGDATA=/var/lib/postgresql/data/pgdata`.
 2. Create/deploy the convex-backend service, attach its volume at `/convex/data`, set `PORT=3210`, and set `POSTGRES_URL` pointed at the database private host without a database path.
-3. Generate a public domain for `convex-backend` and set the Public Networking target port to `3210`.
-4. Confirm `https://<convex-backend-domain>/version` returns HTTP 200. The response body may be `unknown`.
-5. Run `./generate_admin_key.sh` inside `convex-backend` via Railway SSH.
-6. Create/deploy `convex-dashboard` with `NEXT_PUBLIC_DEPLOYMENT_URL` set to the backend public URL.
-7. Create/deploy `frontend` with `EXPO_PUBLIC_CONVEX_URL`, `CONVEX_SELF_HOSTED_URL`, and `CONVEX_SELF_HOSTED_ADMIN_KEY` set.
-8. Smoke test the SPA and Convex health query.
+3. Generate a public API domain for `convex-backend` and set its Public Networking target port to `3210`.
+4. In the same `convex-backend` service Public Networking section, generate a second public domain with target port `3211`, and set it as `CONVEX_SITE_ORIGIN`, `CONVEX_SITE_URL`, and `EXPO_PUBLIC_CONVEX_SITE_URL`.
+5. Confirm `https://<convex-api-domain>/version` returns HTTP 200. The response body may be `unknown`.
+6. Run `./generate_admin_key.sh` inside `convex-backend` via Railway SSH.
+7. Create/deploy `convex-dashboard` with `NEXT_PUBLIC_DEPLOYMENT_URL` set to the API public URL.
+8. Create/deploy `frontend` with `EXPO_PUBLIC_CONVEX_URL`, `EXPO_PUBLIC_CONVEX_SITE_URL`, `SITE_URL`, `CONVEX_SELF_HOSTED_URL`, and `CONVEX_SELF_HOSTED_ADMIN_KEY` set.
+9. Smoke test sign-up, sign-in, sign-out, task CRUD, AI preview/execute, and SPA route refresh.
 
 ## Local Development
 
-Install dependencies:
-
 ```bash
 pnpm install
-```
-
-Run Convex dev locally or against the configured self-hosted backend:
-
-```bash
 pnpm --filter @icarun/mobile convex:dev
+pnpm --filter @icarun/mobile web
 ```
 
-Run Expo Web:
+Local Convex writes these frontend-safe values to `apps/mobile/.env.local`:
 
-```bash
-pnpm --filter @icarun/mobile web
+```env
+EXPO_PUBLIC_CONVEX_URL=http://127.0.0.1:3210
+EXPO_PUBLIC_CONVEX_SITE_URL=http://127.0.0.1:3211
 ```
 
 ## Validation
@@ -267,18 +248,19 @@ pnpm build
 
 After deployment:
 
-- Open `https://<convex-backend-domain>/version` and verify HTTP 200; `unknown` as the body is acceptable.
+- Open `https://<convex-api-domain>/version` and verify HTTP 200; `unknown` as the body is acceptable.
 - Open the frontend Railway URL.
-- Check Settings for Convex health.
+- Sign up, sign out, sign in again.
 - Create, update, complete, and delete a task.
 - Refresh a dynamic route such as `/tasks/<id>` and verify SPA fallback works.
 - Configure `OPENAI_API_KEY` on `convex-backend`, then test AI preview and confirmed execute.
 
 ## Security Notes
 
-- Only `EXPO_PUBLIC_CONVEX_URL` is public and safe for the client.
-- Use public Railway domains for browser-facing Convex URLs and private Railway domains only for backend-to-database traffic.
-- Never expose `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, or `CONVEX_SELF_HOSTED_ADMIN_KEY` as `EXPO_PUBLIC_*` variables.
+- `EXPO_PUBLIC_CONVEX_URL` and `EXPO_PUBLIC_CONVEX_SITE_URL` are public and safe for the client.
+- Never expose `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `BETTER_AUTH_SECRET`, or `CONVEX_SELF_HOSTED_ADMIN_KEY` as `EXPO_PUBLIC_*` variables.
 - AI must continue to use preview -> confirmation -> execute.
 - Application code must continue to use Convex APIs, not PostgreSQL directly.
 - Do not commit Railway-generated secrets, local `.env*`, or local Convex runtime state.
+
+

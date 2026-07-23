@@ -5,12 +5,8 @@ import {
   taskPriorityValidator
 } from "./schema";
 import { serializeTask, SerializedTask } from "./lib/serializers";
+import { requireUserId } from "./lib/auth";
 
-// ---------------------------------------------------------------------------
-// Queries
-// ---------------------------------------------------------------------------
-
-// List tasks with optional filters. Mirrors GET /api/tasks query params.
 export const list = query({
   args: {
     status: v.optional(taskStatusValidator),
@@ -19,32 +15,37 @@ export const list = query({
     tag: v.optional(v.string())
   },
   handler: async (ctx, args): Promise<SerializedTask[]> => {
+    const ownerId = await requireUserId(ctx);
+
     let docs;
     if (args.status !== undefined) {
-      const status = args.status;
       docs = await ctx.db
         .query("tasks")
-        .withIndex("by_status", (qb) => qb.eq("status", status))
+        .withIndex("by_owner_status", (qb) =>
+          qb.eq("ownerId", ownerId).eq("status", args.status!)
+        )
         .collect();
     } else if (args.priority !== undefined) {
-      const priority = args.priority;
       docs = await ctx.db
         .query("tasks")
-        .withIndex("by_priority", (qb) => qb.eq("priority", priority))
+        .withIndex("by_owner_priority", (qb) =>
+          qb.eq("ownerId", ownerId).eq("priority", args.priority!)
+        )
         .collect();
     } else {
-      docs = await ctx.db.query("tasks").collect();
+      docs = await ctx.db
+        .query("tasks")
+        .withIndex("by_owner", (qb) => qb.eq("ownerId", ownerId))
+        .collect();
     }
 
     let tasks = docs.map(serializeTask);
 
-    // Apply remaining filters in memory (simple + fine for MVP scale).
     if (args.status !== undefined && args.priority !== undefined) {
       tasks = tasks.filter((t) => t.priority === args.priority);
     }
     if (args.tag !== undefined) {
-      const tag = args.tag;
-      tasks = tasks.filter((t) => t.tags.includes(tag));
+      tasks = tasks.filter((t) => t.tags.includes(args.tag!));
     }
     if (args.q !== undefined && args.q.trim() !== "") {
       const needle = args.q.trim().toLowerCase();
@@ -55,29 +56,25 @@ export const list = query({
       );
     }
 
-    // Newest first.
     tasks.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return tasks;
   }
 });
 
-// Get a single task by id. Returns null if not found.
 export const get = query({
   args: { id: v.id("tasks") },
   handler: async (ctx, args): Promise<SerializedTask | null> => {
+    const ownerId = await requireUserId(ctx);
     const doc = await ctx.db.get(args.id);
-    return doc ? serializeTask(doc) : null;
+    if (!doc || doc.ownerId !== ownerId) return null;
+    return serializeTask(doc);
   }
 });
-// ---------------------------------------------------------------------------
-// Mutations
-// ---------------------------------------------------------------------------
 
 function nowIso(): string {
   return new Date().toISOString();
 }
 
-// Create a task. Mirrors POST /api/tasks.
 export const create = mutation({
   args: {
     title: v.string(),
@@ -87,7 +84,9 @@ export const create = mutation({
     tags: v.optional(v.array(v.string()))
   },
   handler: async (ctx, args): Promise<SerializedTask> => {
+    const ownerId = await requireUserId(ctx);
     const id = await ctx.db.insert("tasks", {
+      ownerId,
       title: args.title,
       description: args.description ?? null,
       status: "todo",
@@ -102,7 +101,6 @@ export const create = mutation({
   }
 });
 
-// Update a task. Mirrors PATCH /api/tasks/:id. All fields optional.
 export const update = mutation({
   args: {
     id: v.id("tasks"),
@@ -114,8 +112,9 @@ export const update = mutation({
     tags: v.optional(v.array(v.string()))
   },
   handler: async (ctx, args): Promise<SerializedTask> => {
+    const ownerId = await requireUserId(ctx);
     const existing = await ctx.db.get(args.id);
-    if (!existing) throw new Error("NOT_FOUND");
+    if (!existing || existing.ownerId !== ownerId) throw new Error("NOT_FOUND");
 
     const patch: Record<string, unknown> = { updatedAt: nowIso() };
     if (args.title !== undefined) patch.title = args.title;
@@ -127,17 +126,17 @@ export const update = mutation({
 
     await ctx.db.patch(args.id, patch);
     const doc = await ctx.db.get(args.id);
-    if (!doc) throw new Error("NOT_FOUND");
+    if (!doc || doc.ownerId !== ownerId) throw new Error("NOT_FOUND");
     return serializeTask(doc);
   }
 });
 
-// Delete a task. Mirrors DELETE /api/tasks/:id.
 export const remove = mutation({
   args: { id: v.id("tasks") },
   handler: async (ctx, args): Promise<{ ok: true }> => {
+    const ownerId = await requireUserId(ctx);
     const existing = await ctx.db.get(args.id);
-    if (!existing) throw new Error("NOT_FOUND");
+    if (!existing || existing.ownerId !== ownerId) throw new Error("NOT_FOUND");
     await ctx.db.delete(args.id);
     return { ok: true };
   }

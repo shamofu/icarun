@@ -1,6 +1,6 @@
 # Security Notes
 
-icarun includes AI-assisted task control, so safety and secret handling are important even for the MVP.
+icarun includes Better Auth accounts and AI-assisted task control, so auth isolation, safety, and secret handling are important even for the MVP.
 
 ## Secret Management
 
@@ -11,6 +11,7 @@ OPENAI_API_KEY
 OPENAI_BASE_URL
 OPENAI_MODEL
 CONVEX_SELF_HOSTED_ADMIN_KEY
+BETTER_AUTH_SECRET
 INSTANCE_SECRET
 POSTGRES_URL
 POSTGRES_PASSWORD
@@ -18,36 +19,49 @@ POSTGRES_PASSWORD
 
 Only frontend-safe variables may use the `EXPO_PUBLIC_` prefix.
 
-Allowed client variable:
+Allowed client variables:
 
 ```env
 EXPO_PUBLIC_CONVEX_URL=http://127.0.0.1:3210
+EXPO_PUBLIC_CONVEX_SITE_URL=http://127.0.0.1:3211
 ```
 
-`EXPO_PUBLIC_CONVEX_URL` is a public deployment URL, not a secret.
+`EXPO_PUBLIC_CONVEX_URL` and `EXPO_PUBLIC_CONVEX_SITE_URL` are public deployment URLs, not secrets. The site URL is required for Better Auth HTTP routes.
 
-Set server-only secrets in the Convex deployment environment:
+Set server-only secrets in the Convex deployment/backend environment:
 
 ```bash
 npx convex env set OPENAI_API_KEY sk-your-key
 npx convex env set OPENAI_BASE_URL https://api.openai.com/v1
 npx convex env set OPENAI_MODEL gpt-4.1-mini
+npx convex env set BETTER_AUTH_SECRET <long-random-secret>
+npx convex env set SITE_URL <frontend-origin>
 ```
 
+## Authentication
+
+Authentication is implemented with Better Auth via `@convex-dev/better-auth`.
+
+- Email/password sign-up and sign-in are enabled.
+- The client uses Better Auth cookie/JWT exchange through `ConvexBetterAuthProvider`, not a private bearer token.
+- Better Auth HTTP routes are mounted at `/api/auth/*` on the Convex HTTP/site origin.
+- Tasks store `ownerId` and all task CRUD queries/mutations require an authenticated Convex identity.
+- AI preview/execute require authentication and only include the current user's tasks in LLM context.
+- Existing pre-auth tasks without `ownerId` are hidden after account mode is enabled.
+- `BETTER_AUTH_SECRET` must remain server-side and must not use the `EXPO_PUBLIC_` prefix.
 
 ## Railway Domain and Reference Variable Safety
 
-Use Railway public domains for browser-facing Convex URLs:
+Use public domains for browser-facing Convex URLs:
 
 ```env
-EXPO_PUBLIC_CONVEX_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
-CONVEX_SELF_HOSTED_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
-NEXT_PUBLIC_DEPLOYMENT_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
+EXPO_PUBLIC_CONVEX_URL=https://<convex-api-public-domain>
+EXPO_PUBLIC_CONVEX_SITE_URL=https://<convex-site-public-domain>
+CONVEX_SELF_HOSTED_URL=https://<convex-api-public-domain>
+NEXT_PUBLIC_DEPLOYMENT_URL=https://<convex-api-public-domain>
 ```
 
-These values ultimately resolve to `https://${{ RAILWAY_PUBLIC_DOMAIN }}` on the `convex-backend` service. They must be public because Expo Web and the Convex dashboard run in the user's browser.
-
-Use Railway private domains only for server-to-server traffic, currently the backend-to-database connection:
+Use Railway private domains only for server-to-server traffic, currently backend-to-database:
 
 ```env
 POSTGRES_URL=postgresql://${{ database.POSTGRES_USER }}:${{ database.POSTGRES_PASSWORD }}@${{ database.RAILWAY_PRIVATE_DOMAIN }}:5432
@@ -101,13 +115,7 @@ Always require explicit user confirmation for:
 - bulk deletes
 - ambiguous AI commands
 
-Verify task existence before update/delete.
-
-## Authentication
-
-A full auth system is out of scope for the first MVP unless explicitly requested.
-
-If auth is added later, prefer Convex-supported auth patterns or providers. Do not put backend-only bearer tokens into Expo client code.
+Verify task existence and ownership before update/delete.
 
 ## Rate Limiting
 
@@ -115,10 +123,9 @@ AI actions can trigger provider costs.
 
 Potential later improvements:
 
-- add per-user auth
-- add Convex-side usage logging
-- add provider-side limits
 - add app-level throttling around `api.ai.preview` and `api.ai.execute`
+- add provider-side limits
+- add per-user quotas
 
 ## Input Validation
 
@@ -164,6 +171,7 @@ Do log:
 Do not log:
 
 - OpenAI API keys
+- Better Auth cookies/tokens
 - full request headers containing secrets
 - unrelated private user data
 
@@ -173,11 +181,11 @@ Do not log:
 - AI actions must not write raw documents directly.
 - AI actions execute through validated mutations.
 - Do not execute user-generated or AI-generated SQL.
-- Verify task IDs before updates/deletes.
+- Verify task IDs and ownership before updates/deletes.
 
 ## Frontend Safety
 
-Expo code must not import server-only modules that read `process.env.OPENAI_API_KEY`.
+Expo code must not import server-only modules that read `process.env.OPENAI_API_KEY` or `process.env.BETTER_AUTH_SECRET`.
 
 Frontend code must not reference:
 
@@ -185,6 +193,7 @@ Frontend code must not reference:
 process.env.OPENAI_API_KEY
 process.env.OPENAI_BASE_URL
 process.env.OPENAI_MODEL
+process.env.BETTER_AUTH_SECRET
 ```
 
-If the frontend needs configuration, use `EXPO_PUBLIC_*` only.
+If the frontend needs configuration, use `EXPO_PUBLIC_*` only. The only auth-related frontend public variable is `EXPO_PUBLIC_CONVEX_SITE_URL`.

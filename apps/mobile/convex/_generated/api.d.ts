@@ -10,8 +10,11 @@
 
 import type * as ai from "../ai.js";
 import type * as aiInternal from "../aiInternal.js";
+import type * as auth from "../auth.js";
 import type * as health from "../health.js";
+import type * as http from "../http.js";
 import type * as lib_aiSchemas from "../lib/aiSchemas.js";
+import type * as lib_auth from "../lib/auth.js";
 import type * as lib_openai from "../lib/openai.js";
 import type * as lib_prompt from "../lib/prompt.js";
 import type * as lib_serializers from "../lib/serializers.js";
@@ -26,8 +29,11 @@ import type {
 declare const fullApi: ApiFromModules<{
   ai: typeof ai;
   aiInternal: typeof aiInternal;
+  auth: typeof auth;
   health: typeof health;
+  http: typeof http;
   "lib/aiSchemas": typeof lib_aiSchemas;
+  "lib/auth": typeof lib_auth;
   "lib/openai": typeof lib_openai;
   "lib/prompt": typeof lib_prompt;
   "lib/serializers": typeof lib_serializers;
@@ -60,4 +66,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
+};

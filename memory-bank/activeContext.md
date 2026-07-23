@@ -2,7 +2,7 @@
 
 ## Current Status
 
-The project has been migrated from the prior PostgreSQL + Drizzle + Express plan to a Convex-backed architecture, and deployment is now being reworked for Railway self-hosted Convex without Docker Compose.
+The project has been migrated from the prior PostgreSQL + Drizzle + Express plan to a Convex-backed architecture and now includes Better Auth email/password accounts.
 
 Current implemented structure includes:
 
@@ -44,6 +44,10 @@ services/database/
 - Documented Convex backend `PORT=3210`, Public Networking target port `3210`, and `/version` returning `unknown` as acceptable with HTTP 200.
 - Documented Railway PostgreSQL `PGDATA=/var/lib/postgresql/data/pgdata` to avoid `lost+found` initdb failures.
 - Documented Railway reference variable wiring across frontend, Convex backend, Convex dashboard, and database services.
+- Added Better Auth email/password accounts via `@convex-dev/better-auth`.
+- Added Convex HTTP auth routes under `/api/auth/*`.
+- Added per-user task isolation with `ownerId`.
+- Scoped AI preview/execute to the authenticated user's tasks.
 
 ## Current Direction
 
@@ -60,19 +64,16 @@ Use Convex as the application database/backend source of truth. PostgreSQL is on
 
 ## Immediate Next Steps
 
-1. Finish Railway service configuration with reference variables.
-2. Ensure database has `PGDATA=/var/lib/postgresql/data/pgdata` and a volume at `/var/lib/postgresql/data`.
-3. Ensure convex-backend has `PORT=3210`, Public Networking target port `3210`, and `/version` returns HTTP 200.
-4. Generate the self-hosted Convex admin key with `railway ssh` on `convex-backend`.
-5. Set `CONVEX_SELF_HOSTED_ADMIN_KEY` on the frontend service directly or via a sealed shared variable.
-6. Deploy frontend so `convex deploy` pushes functions to self-hosted Convex and exports the Expo Web SPA.
-7. Perform a full browser UI smoke test.
+1. Configure Railway so Convex API traffic reaches port `3210` and Convex HTTP/site auth traffic reaches port `3211`.
+2. Set frontend variables `EXPO_PUBLIC_CONVEX_URL`, `EXPO_PUBLIC_CONVEX_SITE_URL`, `SITE_URL`, `CONVEX_SELF_HOSTED_URL`, and `CONVEX_SELF_HOSTED_ADMIN_KEY`.
+3. Set convex-backend variables `CONVEX_CLOUD_ORIGIN`, `CONVEX_SITE_ORIGIN`, `BETTER_AUTH_SECRET`, `SITE_URL`, and `EXPO_APP_SCHEME=icarun`.
+4. Deploy frontend so `convex deploy` pushes Better Auth component/functions to self-hosted Convex and exports the Expo Web SPA.
+5. Smoke test sign-up, sign-in, sign-out, task CRUD isolation, AI preview/execute, and dynamic route refresh.
 
 ## Open Decisions
 
+- Exact Railway topology for exposing Convex HTTP actions port `3211` if a single service cannot expose two public target ports.
 - Whether to use Railway's managed PostgreSQL template instead of the repository-managed `services/database` image wrapper later.
-- Whether to expose Convex HTTP actions on a separate domain/port if `convex/http.ts` is added later.
-- Whether to add full authentication later.
 - Whether to add rate limiting / quotas for AI actions.
 - Whether to normalize tags after MVP.
 - Whether to add richer task date parsing / timezone controls.
@@ -84,14 +85,13 @@ Use Convex as the application database/backend source of truth. PostgreSQL is on
 - Do not use PostgreSQL directly from app code; it is only Convex internal persistence.
 - Do not introduce Drizzle ORM, drizzle-kit, Prisma, or Express.
 - Do not expose OpenAI secrets to Expo.
-- Do not expose `CONVEX_SELF_HOSTED_ADMIN_KEY` to Expo client code.
+- Do not expose `BETTER_AUTH_SECRET` or `CONVEX_SELF_HOSTED_ADMIN_KEY` to Expo client code.
 - Do not use Expo `web.output: 'static'` with dynamic task routes.
 - Do not commit local Convex runtime state (`apps/mobile/.convex/`).
 - Do not commit private local env files (`apps/mobile/.env.local`).
 - Convex generated files under `apps/mobile/convex/_generated/` are required for typecheck and should be committed.
 - Railway source branch remains a service setting in Railway.
 - Do not reintroduce root package-manager pinning fields without re-validating Railway install logs.
-
 - Railway PostgreSQL must use `PGDATA=/var/lib/postgresql/data/pgdata`; using the volume mount root directly can fail because of `lost+found`.
-- Convex backend Public Networking must target port `3210`; `/version` may return `unknown` but must return HTTP 200.
+- Convex API Public Networking must target port `3210`; Better Auth also requires a browser-reachable site/auth origin targeting port `3211`.
 - Use Railway public domains for browser-facing Convex URLs and private domains only for backend-to-database traffic.

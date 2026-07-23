@@ -1,13 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
-// icarun Convex data model.
-//
-// Convex automatically adds `_id` and `_creationTime` to every document, so we
-// do not declare an explicit `id` or `createdAt` column. Application code maps
-// those system fields to the API-facing `id` / `createdAt` values (see
-// convex/lib/serializers.ts).
-
 export const taskStatusValidator = v.union(
   v.literal("todo"),
   v.literal("in_progress"),
@@ -33,24 +26,28 @@ export const aiLogStatusValidator = v.union(
 
 export default defineSchema({
   tasks: defineTable({
+    ownerId: v.optional(v.string()),
     title: v.string(),
     description: v.union(v.string(), v.null()),
     status: taskStatusValidator,
     priority: taskPriorityValidator,
-    // Stored as an ISO-8601 string or null to match the API contract.
     dueDate: v.union(v.string(), v.null()),
     tags: v.array(v.string()),
-    // Application-managed update timestamp (ISO-8601 string). Creation time is
-    // taken from the system `_creationTime` field.
     updatedAt: v.string()
   })
+    .index("by_owner", ["ownerId"])
+    .index("by_owner_status", ["ownerId", "status"])
+    .index("by_owner_priority", ["ownerId", "priority"])
     .index("by_status", ["status"])
     .index("by_priority", ["priority"]),
 
   aiOperationLogs: defineTable({
+    ownerId: v.optional(v.string()),
     input: v.string(),
     actions: v.optional(v.any()),
     result: v.optional(v.any()),
     status: aiLogStatusValidator
-  }).index("by_status", ["status"])
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_status", ["status"])
 });

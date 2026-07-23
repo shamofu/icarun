@@ -15,9 +15,7 @@ pnpm 11.13.1
 
 ## Package Manager
 
-Use pnpm.
-
-Do not use npm or yarn unless explicitly requested.
+Use pnpm. Do not use npm or yarn unless explicitly requested.
 
 ## Workspace
 
@@ -48,6 +46,7 @@ Use:
 - Expo Router 57
 - TypeScript 6
 - Convex React client
+- Better Auth (`@convex-dev/better-auth`, `better-auth`, `@better-auth/expo`)
 
 ## Backend Stack
 
@@ -56,6 +55,7 @@ Use:
 - Self-hosted Convex on Railway
 - TypeScript Convex functions
 - Convex schema validators (`convex/values`)
+- `@convex-dev/better-auth` component for auth persistence/JWT integration
 - Zod for AI output validation
 - OpenAI-compatible Chat Completions API from Convex actions
 
@@ -78,24 +78,18 @@ database           @icarun/database
 
 Docker Compose is intentionally not used.
 
-Railway config-as-code applies to one service, so each service has its own `railway.json`:
-
-```txt
-railway.json
-apps/mobile/railway.json
-services/convex-backend/railway.json
-services/convex-dashboard/railway.json
-services/database/railway.json
-```
+Railway config-as-code applies to one service, so each service has its own `railway.json`.
 
 ## Environment Variables
 
-Recommended Railway reference variable wiring:
+Recommended Railway variable wiring:
 
 ```env
 # frontend service
-EXPO_PUBLIC_CONVEX_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
-CONVEX_SELF_HOSTED_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
+EXPO_PUBLIC_CONVEX_URL=https://<convex-api-public-domain>
+EXPO_PUBLIC_CONVEX_SITE_URL=https://<convex-site-public-domain>
+SITE_URL=https://<frontend-public-domain>
+CONVEX_SELF_HOSTED_URL=https://<convex-api-public-domain>
 CONVEX_SELF_HOSTED_ADMIN_KEY=${{ shared.CONVEX_SELF_HOSTED_ADMIN_KEY }}
 
 # convex-backend service
@@ -104,14 +98,18 @@ INSTANCE_SECRET=replace-with-a-long-random-secret
 INSTANCE_NAME=convex-self-hosted
 POSTGRES_URL=postgresql://${{ database.POSTGRES_USER }}:${{ database.POSTGRES_PASSWORD }}@${{ database.RAILWAY_PRIVATE_DOMAIN }}:5432
 DO_NOT_REQUIRE_SSL=1
-CONVEX_CLOUD_ORIGIN=https://${{ RAILWAY_PUBLIC_DOMAIN }}
-CONVEX_SITE_ORIGIN=https://${{ RAILWAY_PUBLIC_DOMAIN }}
+CONVEX_CLOUD_ORIGIN=https://<convex-api-public-domain>
+CONVEX_SITE_ORIGIN=https://<convex-site-public-domain>
+CONVEX_SITE_URL=https://<convex-site-public-domain>
+BETTER_AUTH_SECRET=replace-with-long-random-secret
+SITE_URL=https://<frontend-public-domain>
+EXPO_APP_SCHEME=icarun
 OPENAI_API_KEY=sk-your-key
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4.1-mini
 
 # convex-dashboard service
-NEXT_PUBLIC_DEPLOYMENT_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
+NEXT_PUBLIC_DEPLOYMENT_URL=https://<convex-api-public-domain>
 
 # database service
 POSTGRES_USER=convex
@@ -120,9 +118,9 @@ POSTGRES_DB=convex_self_hosted
 PGDATA=/var/lib/postgresql/data/pgdata
 ```
 
-Public Railway domains are required for browser-facing Convex URLs. Railway private domains are used only for `convex-backend` -> `database` traffic.
+Public Railway domains are required for browser-facing Convex URLs. Convex API origin must route to port `3210`; Convex site/auth origin must route to port `3211`. Railway private domains are used only for `convex-backend` -> `database` traffic.
 
-`/version` on the Convex backend may return `unknown`; HTTP 200 and Railway healthy status are the success criteria.
+`/version` on the Convex API origin may return `unknown`; HTTP 200 and Railway healthy status are the success criteria.
 
 Never expose these to the frontend as public Expo variables:
 
@@ -131,6 +129,7 @@ OPENAI_API_KEY
 OPENAI_BASE_URL
 OPENAI_MODEL
 CONVEX_SELF_HOSTED_ADMIN_KEY
+BETTER_AUTH_SECRET
 INSTANCE_SECRET
 POSTGRES_URL
 POSTGRES_PASSWORD
@@ -183,4 +182,6 @@ Local files under `apps/mobile/.convex/` and `apps/mobile/.env.local` should not
 
 ## Railway pnpm/Corepack Note
 
-Do not add the legacy top-level `packageManager` field or pnpm 11 `devEngines.packageManager` back to the root `package.json` without re-validating Railway. The top-level `packageManager` previously routed pnpm through Corepack, and `devEngines.packageManager` caused pnpm 11 to write an extra `packageManagerDependencies` YAML document that Railway pnpm 9 rejected with `ERR_PNPM_BROKEN_LOCKFILE`.
+Do not add the legacy top-level `packageManager` field or pnpm 11 `devEngines.packageManager` back to the root `package.json` without re-validating Railway.
+
+

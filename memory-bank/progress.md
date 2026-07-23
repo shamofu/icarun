@@ -41,6 +41,11 @@
 - Railway Convex backend healthcheck mitigation identified: set `PORT=3210` and Public Networking target port `3210`.
 - Railway database `lost+found` mitigation identified: set `PGDATA=/var/lib/postgresql/data/pgdata`.
 - Railway deployment docs updated with reference variables, `PGDATA`, `PORT=3210`, and `/version` `unknown` guidance.
+- Better Auth email/password authentication added.
+- Better Auth Convex component registered and generated.
+- Convex HTTP auth routes added under `/api/auth/*`.
+- Tasks now include optional `ownerId`; new task operations require authentication and write `ownerId`.
+- Task CRUD and AI preview/execute are scoped to the authenticated user.
 
 ## Not Started / Remaining
 
@@ -48,11 +53,11 @@
 - Configure each Railway service to use its service-specific `railway.json`.
 - Attach Railway volume to the database service at `/var/lib/postgresql/data`.
 - Configure production self-hosted Convex backend environment variables.
+- Expose Convex HTTP actions/site origin on port `3211` for Better Auth.
 - Generate self-hosted Convex admin key via `railway ssh` and `./generate_admin_key.sh`.
-- Configure frontend variables `CONVEX_SELF_HOSTED_URL`, `CONVEX_SELF_HOSTED_ADMIN_KEY`, and `EXPO_PUBLIC_CONVEX_URL`.
+- Configure frontend variables `CONVEX_SELF_HOSTED_URL`, `CONVEX_SELF_HOSTED_ADMIN_KEY`, `EXPO_PUBLIC_CONVEX_URL`, `EXPO_PUBLIC_CONVEX_SITE_URL`, and `SITE_URL`.
 - Full browser UI smoke test after Railway deployment.
 - Real AI preview call with a configured `OPENAI_API_KEY`.
-- Authentication.
 - Rate limiting / quotas.
 
 ## Known Risks
@@ -77,16 +82,16 @@ Mitigation:
 - set `PGDATA=/var/lib/postgresql/data/pgdata` to avoid `lost+found` initdb failures
 - keep backend and database in the same Railway region
 
+### Railway Convex backend public ports
 
-### Railway Convex backend public port
-
-The self-hosted Convex backend listens on `3210` for the API and `3211` for HTTP actions. Railway healthcheck and Public Networking must target `3210` for the current app.
+The self-hosted Convex backend listens on `3210` for the API and `3211` for HTTP actions. Better Auth uses HTTP actions for `/api/auth/*`, so production must expose both origins publicly.
 
 Mitigation:
 
-- set `PORT=3210` on `convex-backend`
-- set the `convex-backend` public domain target port to `3210`
-- treat `/version` returning `unknown` as healthy when HTTP status is 200
+- expose Convex API / `CONVEX_CLOUD_ORIGIN` on port `3210`
+- expose Convex site / `CONVEX_SITE_ORIGIN` on port `3211`
+- keep `/version` healthcheck on the `3210` API origin
+- set `EXPO_PUBLIC_CONVEX_SITE_URL` to the browser-reachable `3211` origin
 
 ### Railway reference variable safety
 
@@ -119,15 +124,7 @@ Mitigation:
 
 ### OpenAI-compatible provider differences
 
-Some providers may not support:
-
-```json
-{
-  "response_format": {
-    "type": "json_object"
-  }
-}
-```
+Some providers may not support `response_format`.
 
 Mitigation:
 
@@ -167,11 +164,12 @@ The MVP is complete when:
 - self-hosted Convex backend deploys and `/version` returns HTTP 200, even if the body is `unknown`
 - Convex dashboard can log in with generated admin key
 - Convex functions are deployed to the self-hosted backend
+- Better Auth sign-up/sign-in/sign-out works
 - `api.health.check` works from the frontend
-- task CRUD works
+- task CRUD works per authenticated user
 - Expo Web UI can list/create/update/delete tasks
-- AI preview works with configured provider key
+- AI preview works with configured provider key and only sees the current user's tasks
 - AI execute works after confirmation
-- OpenAI key stays server-side
+- OpenAI and Better Auth secrets stay server-side
 - static SPA deploy succeeds
 - `/tasks/:id` works after browser refresh

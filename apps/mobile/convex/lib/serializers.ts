@@ -1,6 +1,5 @@
 import { Doc } from "../_generated/dataModel";
 
-// API-facing task shape. Matches docs/api-contract.md.
 export type SerializedTask = {
   id: string;
   title: string;
@@ -13,8 +12,6 @@ export type SerializedTask = {
   updatedAt: string;
 };
 
-// Convert a Convex task document into the API-facing task shape.
-// Convex system fields (`_id`, `_creationTime`) are mapped to `id` / `createdAt`.
 export function serializeTask(doc: Doc<"tasks">): SerializedTask {
   return {
     id: doc._id,

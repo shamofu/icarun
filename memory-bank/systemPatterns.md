@@ -5,16 +5,18 @@
 ```txt
 Expo / React Native Web SPA
         |
-        | convex/react
+        | convex/react + Better Auth client
         v
 Self-hosted Convex backend on Railway
+        |
+        +--> Better Auth HTTP routes (/api/auth/*)
         |
         +--> PostgreSQL persistence used internally by Convex
         |
         +--> Convex action -> OpenAI-compatible Chat Completions API
 ```
 
-The application still treats Convex as the database/backend source of truth. PostgreSQL is not an application-facing database and must not be accessed directly by frontend/backend app code.
+The application treats Convex as the database/backend source of truth. PostgreSQL is not application-facing and must not be accessed directly by frontend/backend app code.
 
 ## Railway Monorepo Deployment Pattern
 
@@ -23,14 +25,12 @@ Do not use Docker Compose for Railway deployment.
 Railway config-as-code (`railway.json`) configures one Railway service/deployment. The repository manages multiple services through pnpm workspace packages, each with a service-specific `railway.json`:
 
 ```txt
-railway.json                                  # frontend default / root compatibility
-apps/mobile/railway.json                     # frontend service
-services/convex-backend/railway.json         # self-hosted Convex backend service
-services/convex-dashboard/railway.json       # self-hosted Convex dashboard service
-services/database/railway.json               # PostgreSQL service
+railway.json
+apps/mobile/railway.json
+services/convex-backend/railway.json
+services/convex-dashboard/railway.json
+services/database/railway.json
 ```
-
-Railway services should all point at the same GitHub repository. Configure each service to use the appropriate config file path. Keep the repository root visible so pnpm workspace files are available.
 
 ## Service Layout
 
@@ -43,6 +43,8 @@ frontend
 convex-backend
   package: @icarun/convex-backend
   image wrapper: ghcr.io/get-convex/convex-backend:latest
+  api port: 3210
+  http/site/auth port: 3211
 
 convex-dashboard
   package: @icarun/convex-dashboard
@@ -55,7 +57,6 @@ database
   pgdata: /var/lib/postgresql/data/pgdata
 ```
 
-
 ## Railway Variable Reference Pattern
 
 Use Railway reference variables to avoid duplicated service values:
@@ -64,23 +65,24 @@ Use Railway reference variables to avoid duplicated service values:
 # convex-backend -> database over private networking
 POSTGRES_URL=postgresql://${{ database.POSTGRES_USER }}:${{ database.POSTGRES_PASSWORD }}@${{ database.RAILWAY_PRIVATE_DOMAIN }}:5432
 
-# browser-facing Convex URLs use the backend public domain
-CONVEX_CLOUD_ORIGIN=https://${{ RAILWAY_PUBLIC_DOMAIN }}
-CONVEX_SITE_ORIGIN=https://${{ RAILWAY_PUBLIC_DOMAIN }}
-EXPO_PUBLIC_CONVEX_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
-CONVEX_SELF_HOSTED_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
-NEXT_PUBLIC_DEPLOYMENT_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
+# browser-facing Convex URLs use public domains
+CONVEX_CLOUD_ORIGIN=https://<convex-api-public-domain>        # routes to 3210
+CONVEX_SITE_ORIGIN=https://<convex-site-public-domain>        # routes to 3211
+EXPO_PUBLIC_CONVEX_URL=https://<convex-api-public-domain>
+EXPO_PUBLIC_CONVEX_SITE_URL=https://<convex-site-public-domain>
+CONVEX_SELF_HOSTED_URL=https://<convex-api-public-domain>
+NEXT_PUBLIC_DEPLOYMENT_URL=https://<convex-api-public-domain>
 ```
 
-Public-vs-private rule: browser/client-facing values use Railway public domains; server-to-server database traffic uses Railway private domains. Do not put `RAILWAY_PRIVATE_DOMAIN` into Expo public variables.
+Public-vs-private rule: browser/client-facing values use public domains; server-to-server database traffic uses Railway private domains. Do not put `RAILWAY_PRIVATE_DOMAIN` into Expo public variables.
 
-Convex backend should set `PORT=3210`, and its Railway Public Networking target port should be `3210`. `/version` returning `unknown` is acceptable when the HTTP status is 200.
+Convex API networking targets port `3210`; Better Auth HTTP/site routes require a separate browser-reachable origin targeting port `3211`. `/version` on `3210` returning `unknown` is acceptable when the HTTP status is 200.
 
 ## Frontend Pattern
 
 Use Expo Router.
 
-Use Convex React hooks for server state:
+Use `ConvexBetterAuthProvider` at the root, then use Convex React hooks for authenticated server state:
 
 ```ts
 useQuery(api.tasks.list, args)
@@ -96,6 +98,8 @@ Use Convex function modules:
 
 ```txt
 convex/
+  auth.ts
+  http.ts
   health.ts
   tasks.ts
   ai.ts
@@ -106,6 +110,7 @@ Use helpers for reusable backend logic:
 
 ```txt
 convex/lib/
+  auth.ts
   aiSchemas.ts
   openai.ts
   prompt.ts
@@ -120,9 +125,7 @@ Use Convex schema:
 apps/mobile/convex/schema.ts
 ```
 
-Convex automatically adds `_id` and `_creationTime`. Map them to app-facing `id` and `createdAt` in serializers.
-
-Self-hosted Convex persists internally to PostgreSQL on Railway. The Convex `POSTGRES_URL` must not include the database name or query parameters. With `INSTANCE_NAME=convex-self-hosted`, the database name is `convex_self_hosted`. Railway PostgreSQL must use `PGDATA=/var/lib/postgresql/data/pgdata` so `initdb` does not fail on a volume mount root containing `lost+found`.
+Tasks use `ownerId` to isolate data per Better Auth / Convex JWT subject. Existing pre-auth tasks without `ownerId` are hidden after account mode is enabled.
 
 ## AI Safety Pattern
 
@@ -135,13 +138,15 @@ preview
   -> execute
 ```
 
+AI preview/execute require authentication and only operate on the authenticated user's tasks.
+
 Never:
 
 - execute AI-generated SQL
 - let AI choose arbitrary tables
 - let AI bypass validation
 - let AI directly mutate the database
-- expose OpenAI secrets to the frontend
+- expose OpenAI or Better Auth secrets to the frontend
 
 ## SPA Routing Pattern
 
@@ -174,9 +179,10 @@ Required frontend build/deploy variables:
 
 ```env
 EXPO_PUBLIC_CONVEX_URL
+EXPO_PUBLIC_CONVEX_SITE_URL
+SITE_URL
 CONVEX_SELF_HOSTED_URL
 CONVEX_SELF_HOSTED_ADMIN_KEY
 ```
 
-Generated files under `apps/mobile/convex/_generated/` should be committed.
-Local runtime files under `apps/mobile/.convex/` should not be committed.
+Generated files under `apps/mobile/convex/_generated/` should be committed. Local runtime files under `apps/mobile/.convex/` should not be committed.

@@ -9,8 +9,8 @@ import {
 } from "./lib/aiSchemas";
 import { chatJson, extractJson, OpenAiError } from "./lib/openai";
 import { buildSystemPrompt, defaultPreviewMessage } from "./lib/prompt";
+import { requireUserId } from "./lib/auth";
 
-// Structured error carried back to the client with a stable code.
 export class AiError extends Error {
   code: string;
   constructor(code: string, message: string) {
@@ -19,19 +19,18 @@ export class AiError extends Error {
   }
 }
 
-// ---------------------------------------------------------------------------
-// POST-equivalent: api.ai.preview
-// Calls the LLM, validates output, returns proposed actions. NEVER mutates.
-// ---------------------------------------------------------------------------
 export const preview = action({
   args: { input: v.string() },
   handler: async (ctx, args) => {
+    const ownerId = await requireUserId(ctx);
     const input = args.input.trim();
     if (input.length === 0) {
       throw new AiError("VALIDATION_ERROR", "input must not be empty");
     }
 
-    const tasks = await ctx.runQuery(internal.aiInternal.listForContext, {});
+    const tasks = await ctx.runQuery(internal.aiInternal.listForContext, {
+      ownerId
+    });
     const system = buildSystemPrompt(tasks, new Date().toISOString());
 
     let raw: string;
@@ -42,6 +41,7 @@ export const preview = action({
       ]);
     } catch (err) {
       await ctx.runMutation(internal.aiInternal.logOperation, {
+        ownerId,
         input,
         status: "provider_error"
       });
@@ -54,6 +54,7 @@ export const preview = action({
       parsed = extractJson(raw);
     } catch {
       await ctx.runMutation(internal.aiInternal.logOperation, {
+        ownerId,
         input,
         status: "parse_error"
       });
@@ -63,6 +64,7 @@ export const preview = action({
     const result = aiCommandPreviewSchema.safeParse(parsed);
     if (!result.success) {
       await ctx.runMutation(internal.aiInternal.logOperation, {
+        ownerId,
         input,
         result: result.error.flatten(),
         status: "validation_error"
@@ -78,6 +80,7 @@ export const preview = action({
     const needsConfirm = requiresConfirmation(actions);
 
     await ctx.runMutation(internal.aiInternal.logOperation, {
+      ownerId,
       input,
       actions,
       status: "previewed"
@@ -90,17 +93,14 @@ export const preview = action({
     };
   }
 });
-// ---------------------------------------------------------------------------
-// POST-equivalent: api.ai.execute
-// Re-validates actions, checks existence, enforces confirmation, then executes.
-// ---------------------------------------------------------------------------
+
 export const execute = action({
   args: {
     actions: v.array(v.any()),
     confirmed: v.optional(v.boolean())
   },
   handler: async (ctx, args) => {
-    // Re-validate every action with Zod. Never trust the client.
+    const ownerId = await requireUserId(ctx);
     const actions: AiTaskAction[] = [];
     for (const candidate of args.actions) {
       const result = aiTaskActionSchema.safeParse(candidate);
@@ -117,7 +117,6 @@ export const execute = action({
       throw new AiError("VALIDATION_ERROR", "actions must not be empty");
     }
 
-    // Destructive / bulk actions require explicit confirmation.
     if (requiresConfirmation(actions) && args.confirmed !== true) {
       throw new AiError(
         "FORBIDDEN",
@@ -125,13 +124,13 @@ export const execute = action({
       );
     }
 
-    // Verify that update/delete targets exist before doing anything.
     const targetIds = actions
       .filter((a) => a.type === "update_task" || a.type === "delete_task")
       .map((a) => (a as { payload: { id: string } }).payload.id);
 
     if (targetIds.length > 0) {
       const existing = await ctx.runQuery(internal.aiInternal.getExistingIds, {
+        ownerId,
         ids: targetIds
       });
       const existingSet = new Set(existing);
@@ -142,7 +141,6 @@ export const execute = action({
       }
     }
 
-    // Execute each allowed action through the public task mutations.
     const results: Array<Record<string, unknown>> = [];
     try {
       for (const actionItem of actions) {
@@ -172,12 +170,12 @@ export const execute = action({
           });
           results.push({ type: "delete_task", taskId: actionItem.payload.id });
         } else if (actionItem.type === "summarize_tasks") {
-          // Summaries are read-only and produce no mutation.
           results.push({ type: "summarize_tasks" });
         }
       }
     } catch (err) {
       await ctx.runMutation(internal.aiInternal.logOperation, {
+        ownerId,
         input: "",
         actions,
         result: { error: String(err) },
@@ -188,6 +186,7 @@ export const execute = action({
     }
 
     await ctx.runMutation(internal.aiInternal.logOperation, {
+      ownerId,
       input: "",
       actions,
       result: results,
