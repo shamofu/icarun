@@ -1,12 +1,15 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS",
+    "builder": "RAILPACK",
     "watchPatterns": [
-      "apps/mobile/**",
-      "package.json",
-      "pnpm-lock.yaml",
-      "pnpm-workspace.yaml"
+      "/apps/mobile/**",
+      "/package.json",
+      "/pnpm-lock.yaml",
+      "/pnpm-workspace.yaml",
+      "/.nvmrc",
+      "/railway.json",
+      "/apps/mobile/railway.json"
     ],
     "buildCommand": "pnpm run railway:build:frontend"
   },

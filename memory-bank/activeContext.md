@@ -36,7 +36,7 @@ services/database/
 - Updated mobile dependencies to Expo SDK 57-compatible versions.
 - Verified updated dependencies with Expo dependency check, peer check, typecheck, and web build.
 - Added Railway config-as-code for frontend SPA hosting.
-- Pinned Railway/Nixpacks Node runtime to Node.js 22 LTS.
+- Pinned Railway frontend Node runtime to Node.js 22 LTS.
 - Removed root top-level `packageManager` and pnpm 11 `devEngines.packageManager` for Railway pnpm compatibility.
 - Added `services/*` to the pnpm workspace.
 - Added service wrapper packages for self-hosted Convex backend, Convex dashboard, and PostgreSQL.
@@ -48,6 +48,7 @@ services/database/
 - Added Convex HTTP auth routes under `/api/auth/*`.
 - Added per-user task isolation with `ownerId`.
 - Scoped AI preview/execute to the authenticated user's tasks.
+- Updated frontend Railway builder from Nixpacks to Railpack and normalized all Railway Watch Paths for Skipped Builds.
 
 ## Current Direction
 

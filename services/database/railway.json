@@ -3,7 +3,7 @@
   "build": {
     "builder": "DOCKERFILE",
     "watchPatterns": [
-      "services/database/**"
+      "/services/database/**"
     ],
     "dockerfilePath": "services/database/Dockerfile"
   },

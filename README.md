@@ -226,6 +226,8 @@ EXPO_PUBLIC_CONVEX_SITE_URL=https://<convex-site-public-domain> # routes to 3211
 
 Expose both origins from the single `convex-backend` service: in its Railway Public Networking section, generate one domain targeting port `3210` (API) and one targeting port `3211` (HTTP actions / Better Auth). See `docs/deployment.md` for the full Railway variable list.
 
+Railway Skipped Builds are configured through `build.watchPatterns` in each service `railway.json`. The frontend service uses Railpack (`build.builder: "RAILPACK"`); the Convex backend, dashboard, and database services remain Dockerfile builders because they wrap official upstream images.
+
 ## Documentation
 
 Important docs:

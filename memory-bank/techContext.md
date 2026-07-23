@@ -4,7 +4,7 @@
 
 Use Node.js for local tooling and Expo/Convex development.
 
-Railway/Nixpacks runtime is pinned to Node.js 22 LTS (`engines.node: 22.x` and `.nvmrc: 22`). The root `package.json` intentionally omits both the legacy top-level `packageManager` field and pnpm 11 `devEngines.packageManager` so Railway can use its detected pnpm version and the lockfile stays pnpm-9-readable.
+Railway frontend builds use Railpack (`build.builder: "RAILPACK"`) with Node.js 22 LTS pinned by `engines.node: 22.x` and `.nvmrc: 22`. The root `package.json` intentionally omits both the legacy top-level `packageManager` field and pnpm 11 `devEngines.packageManager` so Railway can use its detected pnpm version and the lockfile stays pnpm-9-readable.
 
 Current local environment has been verified with:
 
@@ -79,6 +79,8 @@ database           @icarun/database
 Docker Compose is intentionally not used.
 
 Railway config-as-code applies to one service, so each service has its own `railway.json`.
+
+Skipped Builds are configured with `build.watchPatterns`. The frontend service watches `/apps/mobile/**` plus root build inputs (`/package.json`, `/pnpm-lock.yaml`, `/pnpm-workspace.yaml`, `/.nvmrc`, `/railway.json`, `/apps/mobile/railway.json`). Dockerfile image-wrapper services watch only their own service directory.
 
 ## Environment Variables
 

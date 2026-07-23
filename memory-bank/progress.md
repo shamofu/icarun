@@ -46,6 +46,7 @@
 - Convex HTTP auth routes added under `/api/auth/*`.
 - Tasks now include optional `ownerId`; new task operations require authentication and write `ownerId`.
 - Task CRUD and AI preview/execute are scoped to the authenticated user.
+- Railway frontend config now uses Railpack instead of Nixpacks, and all service Watch Paths are normalized for Skipped Builds.
 
 ## Not Started / Remaining
 
@@ -131,6 +132,16 @@ Mitigation:
 - retry without `response_format`
 - always parse JSON
 - always validate with Zod
+
+### Railway Skipped Builds / Watch Paths
+
+Railway services may skip builds when changed files do not match `build.watchPatterns`.
+
+Mitigation:
+
+- keep frontend watch paths aligned with all files that affect Expo/Convex deploys
+- keep Dockerfile image-wrapper service watch paths limited to their own service directories
+- manually redeploy from Railway when intentionally changing service settings outside watched paths
 
 ### Railway pnpm/Corepack compatibility
 

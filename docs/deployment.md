@@ -16,6 +16,46 @@ Railway project
 
 The app uses Convex as the application backend/database API. PostgreSQL is only the persistence layer for self-hosted Convex; application code must not use PostgreSQL directly and must not add Drizzle, Prisma, or Express.
 
+
+## Railway Builders and Skipped Builds
+
+Railway Skipped Builds are managed with `build.watchPatterns` in each service's `railway.json`. Patterns are repository-root, gitignore-style paths (for example `/apps/mobile/**`). Keep these paths narrow enough to avoid unnecessary rebuilds, but include every file that can affect that service's deploy.
+
+The frontend service uses Railpack, not Nixpacks:
+
+```json
+{
+  "build": {
+    "builder": "RAILPACK"
+  }
+}
+```
+
+The Convex backend, Convex dashboard, and database services intentionally remain `DOCKERFILE` builders because they wrap official upstream images (`ghcr.io/get-convex/convex-backend`, `ghcr.io/get-convex/convex-dashboard`, and `postgres:17`).
+
+Current Watch Paths:
+
+```txt
+frontend
+  /apps/mobile/**
+  /package.json
+  /pnpm-lock.yaml
+  /pnpm-workspace.yaml
+  /.nvmrc
+  /railway.json
+  /apps/mobile/railway.json
+
+convex-backend
+  /services/convex-backend/**
+
+convex-dashboard
+  /services/convex-dashboard/**
+
+database
+  /services/database/**
+```
+
+
 ## Better Auth / HTTP Actions Requirement
 
 Better Auth is mounted through `apps/mobile/convex/http.ts` and serves `/api/auth/*` from the Convex HTTP/site origin.
@@ -91,6 +131,10 @@ Public vs private domain rule:
 
 Workspace package: `@icarun/mobile`
 
+Builder: Railpack (`build.builder: "RAILPACK"`)
+
+Watch Paths: `/apps/mobile/**`, `/package.json`, `/pnpm-lock.yaml`, `/pnpm-workspace.yaml`, `/.nvmrc`, `/railway.json`, `/apps/mobile/railway.json`
+
 Config file:
 
 ```txt
@@ -124,6 +168,10 @@ CONVEX_SELF_HOSTED_ADMIN_KEY=${{ shared.CONVEX_SELF_HOSTED_ADMIN_KEY }}
 ### convex-backend
 
 Workspace package: `@icarun/convex-backend`
+
+Builder: Dockerfile (`build.builder: "DOCKERFILE"`)
+
+Watch Paths: `/services/convex-backend/**`
 
 Config file:
 
@@ -173,6 +221,10 @@ railway ssh
 
 Workspace package: `@icarun/convex-dashboard`
 
+Builder: Dockerfile (`build.builder: "DOCKERFILE"`)
+
+Watch Paths: `/services/convex-dashboard/**`
+
 Config file:
 
 ```txt
@@ -188,6 +240,10 @@ NEXT_PUBLIC_DEPLOYMENT_URL=https://<convex-api-public-domain>
 ### database
 
 Workspace package: `@icarun/database`
+
+Builder: Dockerfile (`build.builder: "DOCKERFILE"`)
+
+Watch Paths: `/services/database/**`
 
 Config file:
 

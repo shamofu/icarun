@@ -3,7 +3,7 @@
   "build": {
     "builder": "DOCKERFILE",
     "watchPatterns": [
-      "services/convex-dashboard/**"
+      "/services/convex-dashboard/**"
     ],
     "dockerfilePath": "services/convex-dashboard/Dockerfile"
   },

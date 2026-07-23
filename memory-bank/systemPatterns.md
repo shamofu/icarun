@@ -24,6 +24,8 @@ Do not use Docker Compose for Railway deployment.
 
 Railway config-as-code (`railway.json`) configures one Railway service/deployment. The repository manages multiple services through pnpm workspace packages, each with a service-specific `railway.json`:
 
+Railway Skipped Builds are controlled by `build.watchPatterns` in each service config. Frontend builds use Railpack (`build.builder: "RAILPACK"`); image-wrapper services use Dockerfile builders. Watch paths are repository-root patterns such as `/apps/mobile/**` and `/services/convex-backend/**`.
+
 ```txt
 railway.json
 apps/mobile/railway.json
