@@ -1,0 +1,9 @@
+{
+  "name": "@icarun/database",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Railway PostgreSQL service wrapper for self-hosted Convex persistence",
+  "scripts": {
+    "railway:info": "node -e \"console.log('Railway builds @icarun/database from services/database/Dockerfile')\""
+  }
+}

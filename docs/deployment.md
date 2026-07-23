@@ -1,62 +1,199 @@
 # Deployment Guide
 
-icarun is designed as a Convex-backed Expo / React Native Web SPA.
+icarun is deployed from a single pnpm workspace repository to multiple Railway services. Docker Compose is intentionally not used for Railway deployment.
 
-The deployment has two parts:
+## Railway Service Layout
 
-1. Convex backend deployment
-2. Static SPA frontend hosting
-
-## Architecture
+Create these Railway services from the same GitHub repository:
 
 ```txt
-Static SPA host
-  |
-  | EXPO_PUBLIC_CONVEX_URL
-  v
-Convex backend
-  |
-  +-- Convex database
-  |
-  +-- Convex queries/mutations/actions
-  |
-  +-- OpenAI-compatible API via Convex env vars
+Railway project
+  frontend           -> @icarun/mobile
+  convex-backend     -> @icarun/convex-backend
+  convex-dashboard   -> @icarun/convex-dashboard
+  database           -> @icarun/database
 ```
 
-## Required Services
+The app still uses Convex as the application backend/database API. PostgreSQL is only the persistence layer for the self-hosted Convex backend; application code must not use PostgreSQL directly and must not add Drizzle, Prisma, or Express.
 
-- Convex project/deployment
-- Static hosting provider for `apps/mobile/dist`
+## Why there are multiple railway.json files
 
-The static host can be Netlify, Vercel static output, GitHub Pages, Railway static hosting, or any provider that can serve an SPA with `index.html` fallback.
+Railway config-as-code (`railway.json`) configures a single Railway service/deployment. It is not a multi-service manifest. To manage all services in one repository, this project uses pnpm workspace packages and a service-specific `railway.json` in each deployable package:
 
-## Required Environment Variables
-
-Frontend build-time variable:
-
-```env
-EXPO_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
+```txt
+railway.json                                  # frontend default / backwards-compatible root config
+apps/mobile/railway.json                     # frontend service config
+services/convex-backend/railway.json         # Convex backend service config
+services/convex-dashboard/railway.json       # Convex dashboard service config
+services/database/railway.json               # PostgreSQL service config
 ```
 
-This is safe to expose to the client.
+When creating each Railway service, set the service's config file path to the matching file above. Keep the service root directory at the repository root for this shared pnpm workspace unless Railway's UI requires otherwise. Watch patterns in each config prevent unrelated changes from triggering every service.
 
-Convex backend environment variables:
+## Service Details
+
+### frontend
+
+Workspace package:
+
+```txt
+@icarun/mobile
+```
+
+Config file:
+
+```txt
+apps/mobile/railway.json
+```
+
+Build command:
+
+```bash
+pnpm run railway:build:frontend
+```
+
+Start command:
+
+```bash
+pnpm run railway:start:frontend
+```
+
+The build command runs Convex deploy for the self-hosted deployment and exports the Expo Web SPA to `apps/mobile/dist`.
+
+Required variables:
 
 ```env
+EXPO_PUBLIC_CONVEX_URL=https://your-convex-backend.up.railway.app
+CONVEX_SELF_HOSTED_URL=https://your-convex-backend.up.railway.app
+CONVEX_SELF_HOSTED_ADMIN_KEY=your-self-hosted-convex-admin-key
+```
+
+`EXPO_PUBLIC_CONVEX_URL` is frontend-safe and is bundled into the client. `CONVEX_SELF_HOSTED_ADMIN_KEY` is a build/deploy secret and must never be exposed to frontend code.
+
+### convex-backend
+
+Workspace package:
+
+```txt
+@icarun/convex-backend
+```
+
+Config file:
+
+```txt
+services/convex-backend/railway.json
+```
+
+Image wrapper:
+
+```txt
+ghcr.io/get-convex/convex-backend:latest
+```
+
+Generate a public Railway domain for the backend service. Convex listens on port 3210; use the generated domain as the public Convex URL. Attach a Railway volume to the backend service at /convex/data for Convex local runtime/storage data.
+
+Required variables:
+
+```env
+INSTANCE_SECRET=replace-with-a-long-random-secret
+INSTANCE_NAME=convex-self-hosted
+POSTGRES_URL=postgresql://convex:password@database.railway.internal:5432
+DO_NOT_REQUIRE_SSL=1
+CONVEX_CLOUD_ORIGIN=https://your-convex-backend.up.railway.app
+CONVEX_SITE_ORIGIN=https://your-convex-backend.up.railway.app
+DISABLE_METRICS_ENDPOINT=true
+RUST_LOG=info
 OPENAI_API_KEY=sk-your-key
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4.1-mini
 ```
 
-Set backend secrets on the Convex deployment:
+Convex requires `POSTGRES_URL` without the database name or query parameters. With `INSTANCE_NAME=convex-self-hosted`, the Convex database name is `convex_self_hosted`.
+
+After first deploy, generate an admin key:
 
 ```bash
-npx convex env set OPENAI_API_KEY sk-your-key
-npx convex env set OPENAI_BASE_URL https://api.openai.com/v1
-npx convex env set OPENAI_MODEL gpt-4.1-mini
+railway ssh
+./generate_admin_key.sh
 ```
 
-Do not set server secrets as Expo public variables.
+Store the generated key in the frontend service as `CONVEX_SELF_HOSTED_ADMIN_KEY` and use it to log into the dashboard.
+
+### convex-dashboard
+
+Workspace package:
+
+```txt
+@icarun/convex-dashboard
+```
+
+Config file:
+
+```txt
+services/convex-dashboard/railway.json
+```
+
+Image wrapper:
+
+```txt
+ghcr.io/get-convex/convex-dashboard:latest
+```
+
+Generate a public Railway domain for the dashboard service.
+
+Required variables:
+
+```env
+NEXT_PUBLIC_DEPLOYMENT_URL=https://your-convex-backend.up.railway.app
+```
+
+Open the dashboard URL and enter the admin key generated from the backend service.
+
+### database
+
+Workspace package:
+
+```txt
+@icarun/database
+```
+
+Config file:
+
+```txt
+services/database/railway.json
+```
+
+Image wrapper:
+
+```txt
+postgres:17
+```
+
+Attach a Railway volume at:
+
+```txt
+/var/lib/postgresql/data
+```
+
+Required variables:
+
+```env
+POSTGRES_USER=convex
+POSTGRES_PASSWORD=replace-with-db-password
+POSTGRES_DB=convex_self_hosted
+```
+
+Do not expose this service publicly unless needed for emergency maintenance. Keep it on Railway private networking for application use.
+
+## Deployment Order
+
+1. Create/deploy the database service and attach its volume at /var/lib/postgresql/data.
+2. Create/deploy the convex-backend service, attach its volume at /convex/data, and set POSTGRES_URL pointed at the database host without a database path.
+3. Generate a public domain for `convex-backend`.
+4. Run `./generate_admin_key.sh` inside `convex-backend` via Railway SSH.
+5. Create/deploy `convex-dashboard` with `NEXT_PUBLIC_DEPLOYMENT_URL` set to the backend public URL.
+6. Create/deploy `frontend` with `EXPO_PUBLIC_CONVEX_URL`, `CONVEX_SELF_HOSTED_URL`, and `CONVEX_SELF_HOSTED_ADMIN_KEY` set.
+7. Smoke test the SPA and Convex health query.
 
 ## Local Development
 
@@ -66,150 +203,39 @@ Install dependencies:
 pnpm install
 ```
 
-Start Convex dev:
+Run Convex dev locally or against the configured self-hosted backend:
 
 ```bash
 pnpm --filter @icarun/mobile convex:dev
 ```
 
-This creates/uses a Convex deployment, regenerates `convex/_generated`, and writes the local public Convex URL to `apps/mobile/.env.local`.
-
-Start Expo Web:
+Run Expo Web:
 
 ```bash
 pnpm --filter @icarun/mobile web
 ```
 
-## Build Lifecycle
-
-Expected root-level build:
-
-```bash
-pnpm build
-```
-
-This runs:
-
-```bash
-pnpm --filter @icarun/mobile build
-```
-
-and writes the static web output to:
-
-```txt
-apps/mobile/dist
-```
-
-## Convex Production Deploy
-
-Deploy Convex functions and build against the production Convex URL:
-
-```bash
-pnpm --filter @icarun/mobile convex:deploy
-```
-
-The script uses:
-
-```bash
-convex deploy --cmd-url-env-var-name EXPO_PUBLIC_CONVEX_URL --cmd "expo export --platform web --output-dir dist"
-```
-
-`convex deploy` sets `EXPO_PUBLIC_CONVEX_URL` for the build command so the built frontend points at the production Convex deployment.
-
-## SPA Fallback
-
-Expo config must keep:
-
-```ts
-web: {
-  bundler: 'metro',
-  output: 'single'
-}
-```
-
-The static host should serve `index.html` for non-file routes such as:
-
-```txt
-/tasks/abc123
-/settings
-```
-
-## Railway Deployment
-
-Railway hosts the Expo Web static SPA from `apps/mobile/dist`. The Convex backend is still deployed to Convex Cloud; Railway only serves the built frontend.
-
-This repository includes `railway.json` for Railway config-as-code:
-
-The build runtime is pinned to Node.js 22 LTS via `package.json` `engines.node` and `.nvmrc`. The root `package.json` intentionally omits both the legacy top-level `packageManager` field and pnpm 11 `devEngines.packageManager` so Nixpacks uses its detected `pnpm-9_x` package and `pnpm-lock.yaml` remains a single YAML document that Railway can parse.
-
-- build uses Nixpacks and runs `pnpm run railway:build`.
-- `railway:build` runs `pnpm --filter @icarun/mobile convex:deploy`.
-- `convex:deploy` deploys Convex functions and runs the Expo Web export with `EXPO_PUBLIC_CONVEX_URL` set to the production Convex URL.
-- start runs `serve apps/mobile/dist --single`, which serves the SPA and rewrites non-file routes such as `/tasks/<id>` to `index.html`.
-
-### Railway GitHub settings
-
-In Railway, connect the GitHub repository to a service and configure the service source branch to:
-
-```txt
-release
-```
-
-Railway's source branch is a service setting in the Railway dashboard, not a value that can be committed in `railway.json`. Keep the Railway root directory at the repository root so the pnpm workspace and `railway.json` are visible.
-
-### Railway service variables
-
-Set this variable on the Railway service:
-
-```env
-CONVEX_DEPLOY_KEY=prod:your-convex-deploy-key
-```
-
-Generate the production deploy key in the Convex dashboard. Do not set `OPENAI_API_KEY`, `OPENAI_BASE_URL`, or `OPENAI_MODEL` as Expo public variables; those provider secrets belong on the Convex deployment via `npx convex env set ...`.
-
-Railway provides `PORT` automatically. The `serve` package reads `PORT` when no explicit listen port is supplied.
-
-### Deploy flow
-
-```txt
-push to release
-  -> Railway GitHub autodeploy for the release branch
-  -> pnpm install
-  -> pnpm run railway:build
-       -> convex deploy using CONVEX_DEPLOY_KEY
-       -> expo export writes apps/mobile/dist with production EXPO_PUBLIC_CONVEX_URL
-  -> pnpm run start
-       -> serve apps/mobile/dist --single on Railway's PORT
-```
-
-## Deployment Checklist
+## Validation
 
 Before deployment:
 
-- `pnpm install` succeeds
-- `package.json` pins `engines.node` to `22.x`
-- `.nvmrc` contains `22`
-- root `package.json` has no top-level `packageManager` field
-- root `package.json` has no `devEngines.packageManager` field
-- `pnpm-lock.yaml` is a single YAML document with no extra `---` document separators
-- `pnpm typecheck` succeeds
-- Convex functions are ready via `pnpm --filter @icarun/mobile convex:dev`
-- `pnpm build` succeeds
-- `railway.json` is committed
-- Railway service is connected to the GitHub `release` branch
-- Railway service variable `CONVEX_DEPLOY_KEY` is set
-- `apps/mobile/convex/_generated/` is committed
-- `.env.example` is up to date
-- Convex env vars are configured
-- OpenAI key is not exposed to frontend
-- SPA fallback is configured on the static host
-- Railway start command serves `apps/mobile/dist` with `serve --single`
+```bash
+pnpm typecheck
+pnpm build
+```
 
 After deployment:
 
-- Open the app URL
-- Check Settings for Convex health
-- Create a task
-- Refresh a dynamic task URL like `/tasks/<id>`
-- Test AI preview with a safe command
-- Confirm AI execute requires confirmation
+- Open the frontend Railway URL.
+- Check Settings for Convex health.
+- Create, update, complete, and delete a task.
+- Refresh a dynamic route such as `/tasks/<id>` and verify SPA fallback works.
+- Configure `OPENAI_API_KEY` on `convex-backend`, then test AI preview and confirmed execute.
+
+## Security Notes
+
+- Only `EXPO_PUBLIC_CONVEX_URL` is public and safe for the client.
+- Never expose `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, or `CONVEX_SELF_HOSTED_ADMIN_KEY` as `EXPO_PUBLIC_*` variables.
+- AI must continue to use preview -> confirmation -> execute.
+- Application code must continue to use Convex APIs, not PostgreSQL directly.
+- Do not commit Railway-generated secrets, local `.env*`, or local Convex runtime state.

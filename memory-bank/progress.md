@@ -31,32 +31,57 @@
 - Basic Convex function runtime checks performed (`health.check`, task create/list/remove, AI confirmation guard).
 - Mobile dependencies updated to Expo SDK 57-compatible versions.
 - Updated dependency set passes Expo dependency check, peer dependency check, TypeScript typecheck, and Expo Web build.
-- Railway config-as-code added for Nixpacks build and SPA start command.
-- Root `railway:build` and `start` scripts added.
-- `serve` dependency added to host `apps/mobile/dist` with SPA fallback.
 - Railway Node runtime pinned to Node.js 22 LTS via `engines.node` and `.nvmrc`.
-- Root top-level `packageManager` removed so Nixpacks detects pnpm from `pnpm-lock.yaml` instead of using the Corepack shim that failed on Railway Node 24.10.0.
-- pnpm 11 `devEngines.packageManager` removed and `pnpm-lock.yaml` regenerated as a single YAML document after Railway pnpm 9 rejected the multi-document lockfile.
+- Root top-level `packageManager` removed so Railway avoids the Corepack pnpm shim issue.
+- pnpm 11 `devEngines.packageManager` removed and `pnpm-lock.yaml` regenerated as a single YAML document for Railway pnpm 9 compatibility.
+- `services/*` added to `pnpm-workspace.yaml`.
+- Service packages added for `@icarun/convex-backend`, `@icarun/convex-dashboard`, and `@icarun/database`.
+- Service-specific `railway.json` files added for frontend, Convex backend, Convex dashboard, and database.
+- Docker Compose plan abandoned per user request.
 
 ## Not Started / Remaining
 
-- Real production Convex deployment setup.
-- Production OpenAI-compatible env var configuration.
-- Railway service setup: connect GitHub repo, set source branch to `release`, set `CONVEX_DEPLOY_KEY`, and run first deploy.
-- Full browser UI smoke test after Expo SDK 57 dependency update.
+- Create Railway services from the same GitHub repository.
+- Configure each Railway service to use its service-specific `railway.json`.
+- Attach Railway volume to the database service at `/var/lib/postgresql/data`.
+- Configure production self-hosted Convex backend environment variables.
+- Generate self-hosted Convex admin key via `railway ssh` and `./generate_admin_key.sh`.
+- Configure frontend variables `CONVEX_SELF_HOSTED_URL`, `CONVEX_SELF_HOSTED_ADMIN_KEY`, and `EXPO_PUBLIC_CONVEX_URL`.
+- Full browser UI smoke test after Railway deployment.
 - Real AI preview call with a configured `OPENAI_API_KEY`.
 - Authentication.
 - Rate limiting / quotas.
 
 ## Known Risks
 
-### Convex local deployment artifacts
+### Railway per-service config
 
-Local Convex runtime state is generated under `apps/mobile/.convex/` and must not be committed.
+Railway `railway.json` configures one service/deployment, not an entire multi-service project.
 
 Mitigation:
 
-- ignore `apps/*/.convex/`
+- use pnpm workspace packages for each service
+- put a service-specific `railway.json` in each package
+- set each Railway service's config file path explicitly
+
+### Database service persistence
+
+The repository-managed PostgreSQL service requires a Railway volume at `/var/lib/postgresql/data`.
+
+Mitigation:
+
+- attach the volume before production use
+- keep backend and database in the same Railway region
+
+### Convex self-host admin key
+
+Self-hosted Convex deploy requires an admin key generated from the backend container.
+
+Mitigation:
+
+- run `railway ssh` on `convex-backend`
+- run `./generate_admin_key.sh`
+- store the resulting key only as `CONVEX_SELF_HOSTED_ADMIN_KEY` on the frontend build/deploy service
 
 ### Convex generated files
 
@@ -85,37 +110,17 @@ Mitigation:
 - always parse JSON
 - always validate with Zod
 
-### Railway Corepack pnpm startup
+### Railway pnpm/Corepack compatibility
 
-Railway previously selected Node 24.10.0 and failed before dependency installation while Corepack launched pnpm 11.13.1 with `ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING`. The failing stack was inside Corepack and `/root/.cache/node/corepack/pnpm/11.13.1/bin/pnpm.cjs`, before app code ran.
-
-Mitigation:
-
-- remove the root top-level `packageManager` field so Nixpacks detects pnpm from `pnpm-lock.yaml` instead of Corepack
-- pin Railway/Nixpacks to Node.js 22 LTS with `package.json` `engines.node: 22.x`
-- add `.nvmrc` with `22`
-- do not use pnpm 11 `devEngines.packageManager` while Railway is using detected `pnpm-9_x`, because it can add lockfile metadata that pnpm 9 cannot parse
-
-### Railway pnpm 9 broken lockfile
-
-Railway/Nixpacks selected `pnpm-9_x` and then failed with `ERR_PNPM_BROKEN_LOCKFILE: expected a single document in the stream, but found more`. The lockfile contained two YAML documents because pnpm 11 `devEngines.packageManager` metadata had been written at the top.
+Railway previously had pnpm/Corepack and pnpm-lock parsing issues.
 
 Mitigation:
 
-- remove root `devEngines.packageManager`
-- regenerate `pnpm-lock.yaml` so it has only one YAML document and no extra `---` separators
-- allow Railway to use detected `pnpm-9_x` for now (`engines.pnpm: >=9 <12`)
-
-### Railway release deployment
-
-The repo config can define Railway build/start behavior, but the GitHub source branch is configured in Railway service settings.
-
-Mitigation:
-
-- set Railway service source branch to `release`
-- keep Railway root directory at the repository root
-- set Railway service variable `CONVEX_DEPLOY_KEY`
-- ensure `railway.json`, `package.json`, and `pnpm-lock.yaml` are committed to the `release` branch
+- keep `engines.node` as `22.x`
+- keep `.nvmrc` as `22`
+- do not re-add root top-level `packageManager`
+- do not re-add pnpm 11 `devEngines.packageManager`
+- keep `pnpm-lock.yaml` as a single YAML document
 
 ### Expo dynamic route refresh
 
@@ -124,7 +129,7 @@ Static hosting may break `/tasks/[id]` refresh if no SPA fallback is configured.
 Mitigation:
 
 - use `web.output: 'single'`
-- configure host index.html fallback
+- use `serve apps/mobile/dist --single`
 
 ## MVP Completion Checklist
 
@@ -133,8 +138,11 @@ The MVP is complete when:
 - `pnpm install` succeeds
 - `pnpm typecheck` succeeds
 - `pnpm build` succeeds
-- Convex functions are deployed
-- `api.health.check` works
+- Railway database service persists data on a volume
+- self-hosted Convex backend deploys and `/version` works
+- Convex dashboard can log in with generated admin key
+- Convex functions are deployed to the self-hosted backend
+- `api.health.check` works from the frontend
 - task CRUD works
 - Expo Web UI can list/create/update/delete tasks
 - AI preview works with configured provider key

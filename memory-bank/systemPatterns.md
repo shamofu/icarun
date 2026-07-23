@@ -7,27 +7,51 @@ Expo / React Native Web SPA
         |
         | convex/react
         v
-Convex backend
+Self-hosted Convex backend on Railway
         |
-        +--> Convex database
+        +--> PostgreSQL persistence used internally by Convex
         |
         +--> Convex action -> OpenAI-compatible Chat Completions API
 ```
 
-## Deployment Pattern
+The application still treats Convex as the database/backend source of truth. PostgreSQL is not an application-facing database and must not be accessed directly by frontend/backend app code.
 
-Use Convex for backend functions and database.
+## Railway Monorepo Deployment Pattern
 
-Use static SPA hosting for the web app output:
+Do not use Docker Compose for Railway deployment.
+
+Railway config-as-code (`railway.json`) configures one Railway service/deployment. The repository manages multiple services through pnpm workspace packages, each with a service-specific `railway.json`:
 
 ```txt
-apps/mobile/dist
+railway.json                                  # frontend default / root compatibility
+apps/mobile/railway.json                     # frontend service
+services/convex-backend/railway.json         # self-hosted Convex backend service
+services/convex-dashboard/railway.json       # self-hosted Convex dashboard service
+services/database/railway.json               # PostgreSQL service
 ```
 
-The static host must serve `index.html` for dynamic routes such as:
+Railway services should all point at the same GitHub repository. Configure each service to use the appropriate config file path. Keep the repository root visible so pnpm workspace files are available.
+
+## Service Layout
 
 ```txt
-/tasks/abc123
+frontend
+  package: @icarun/mobile
+  build: pnpm run railway:build:frontend
+  start: pnpm run railway:start:frontend
+
+convex-backend
+  package: @icarun/convex-backend
+  image wrapper: ghcr.io/get-convex/convex-backend:latest
+
+convex-dashboard
+  package: @icarun/convex-dashboard
+  image wrapper: ghcr.io/get-convex/convex-dashboard:latest
+
+database
+  package: @icarun/database
+  image wrapper: postgres:17
+  volume: /var/lib/postgresql/data
 ```
 
 ## Frontend Pattern
@@ -71,10 +95,12 @@ convex/lib/
 Use Convex schema:
 
 ```txt
-convex/schema.ts
+apps/mobile/convex/schema.ts
 ```
 
 Convex automatically adds `_id` and `_creationTime`. Map them to app-facing `id` and `createdAt` in serializers.
+
+Self-hosted Convex persists internally to PostgreSQL on Railway. The Convex `POSTGRES_URL` must not include the database name or query parameters. With `INSTANCE_NAME=convex-self-hosted`, the database name is `convex_self_hosted`.
 
 ## AI Safety Pattern
 
@@ -93,6 +119,7 @@ Never:
 - let AI choose arbitrary tables
 - let AI bypass validation
 - let AI directly mutate the database
+- expose OpenAI secrets to the frontend
 
 ## SPA Routing Pattern
 
@@ -115,12 +142,19 @@ Run during development:
 pnpm --filter @icarun/mobile convex:dev
 ```
 
-Run for production deploy/build:
+Run for Railway frontend deploy/build against self-hosted Convex:
 
 ```bash
-pnpm --filter @icarun/mobile convex:deploy
+pnpm run railway:build:frontend
+```
+
+Required frontend build/deploy variables:
+
+```env
+EXPO_PUBLIC_CONVEX_URL
+CONVEX_SELF_HOSTED_URL
+CONVEX_SELF_HOSTED_ADMIN_KEY
 ```
 
 Generated files under `apps/mobile/convex/_generated/` should be committed.
-
 Local runtime files under `apps/mobile/.convex/` should not be committed.

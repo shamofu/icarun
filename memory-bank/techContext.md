@@ -4,7 +4,7 @@
 
 Use Node.js for local tooling and Expo/Convex development.
 
-Railway/Nixpacks runtime is pinned to Node.js 22 LTS (`engines.node: 22.x` and `.nvmrc: 22`). The root `package.json` intentionally omits both the legacy top-level `packageManager` field and pnpm 11 `devEngines.packageManager` so Nixpacks uses its detected `pnpm-9_x` package and the lockfile stays pnpm-9-readable.
+Railway/Nixpacks runtime is pinned to Node.js 22 LTS (`engines.node: 22.x` and `.nvmrc: 22`). The root `package.json` intentionally omits both the legacy top-level `packageManager` field and pnpm 11 `devEngines.packageManager` so Railway can use its detected pnpm version and the lockfile stays pnpm-9-readable.
 
 Current local environment has been verified with:
 
@@ -18,6 +18,24 @@ pnpm 11.13.1
 Use pnpm.
 
 Do not use npm or yarn unless explicitly requested.
+
+## Workspace
+
+The repository is a pnpm workspace:
+
+```txt
+apps/*
+services/*
+```
+
+Current deployable workspace packages:
+
+```txt
+@icarun/mobile
+@icarun/convex-backend
+@icarun/convex-dashboard
+@icarun/database
+```
 
 ## Frontend Stack
 
@@ -35,7 +53,7 @@ Use:
 
 Use:
 
-- Convex
+- Self-hosted Convex on Railway
 - TypeScript Convex functions
 - Convex schema validators (`convex/values`)
 - Zod for AI output validation
@@ -43,59 +61,86 @@ Use:
 
 ## Database
 
-Use Convex.
+Use Convex as the application database/backend source of truth.
 
-Do not use PostgreSQL, Drizzle ORM, drizzle-kit, Prisma, or Express for the MVP unless explicitly requested later.
+Self-hosted Convex persists internally to a PostgreSQL service on Railway. PostgreSQL is not application-facing. Do not add Drizzle ORM, drizzle-kit, Prisma, or Express.
 
 ## Deployment
 
-Primary backend target:
+Target Railway services:
 
 ```txt
-Convex Cloud or compatible Convex deployment
+frontend           @icarun/mobile
+convex-backend     @icarun/convex-backend
+convex-dashboard   @icarun/convex-dashboard
+database           @icarun/database
 ```
 
-Frontend deployment style:
+Docker Compose is intentionally not used.
+
+Railway config-as-code applies to one service, so each service has its own `railway.json`:
 
 ```txt
-static SPA hosting
+railway.json
+apps/mobile/railway.json
+services/convex-backend/railway.json
+services/convex-dashboard/railway.json
+services/database/railway.json
 ```
-
-The static host should:
-
-- serve the Expo Web build output
-- support `index.html` fallback for dynamic routes
-
-Railway release deployment is configured with `railway.json` at the repository root. Railway uses Nixpacks on Node.js 22 LTS with detected `pnpm-9_x`, installs from a single-document `pnpm-lock.yaml`, runs `pnpm run railway:build`, then starts `pnpm run start`. The Railway service source branch must be set to `release` in Railway.
 
 ## Environment Variables
 
 Frontend-safe:
 
 ```env
-EXPO_PUBLIC_CONVEX_URL=http://127.0.0.1:3210
+EXPO_PUBLIC_CONVEX_URL=https://your-convex-backend.up.railway.app
 ```
 
-Convex server-side:
+Frontend build/deploy secret for self-hosted Convex:
 
 ```env
+CONVEX_SELF_HOSTED_URL=https://your-convex-backend.up.railway.app
+CONVEX_SELF_HOSTED_ADMIN_KEY=your-admin-key
+```
+
+Convex backend server-only:
+
+```env
+INSTANCE_SECRET=replace-with-a-long-random-secret
+INSTANCE_NAME=convex-self-hosted
+POSTGRES_URL=postgresql://convex:password@database.railway.internal:5432
+DO_NOT_REQUIRE_SSL=1
+CONVEX_CLOUD_ORIGIN=https://your-convex-backend.up.railway.app
+CONVEX_SITE_ORIGIN=https://your-convex-backend.up.railway.app
 OPENAI_API_KEY=sk-your-key
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4.1-mini
 ```
 
-Railway service variable for production deploy/build:
+Dashboard:
 
 ```env
-CONVEX_DEPLOY_KEY=prod:your-convex-deploy-key
+NEXT_PUBLIC_DEPLOYMENT_URL=https://your-convex-backend.up.railway.app
 ```
 
-Never expose these to the frontend or Railway frontend build as public Expo variables:
+Database:
+
+```env
+POSTGRES_USER=convex
+POSTGRES_PASSWORD=replace-with-db-password
+POSTGRES_DB=convex_self_hosted
+```
+
+Never expose these to the frontend as public Expo variables:
 
 ```env
 OPENAI_API_KEY
 OPENAI_BASE_URL
 OPENAI_MODEL
+CONVEX_SELF_HOSTED_ADMIN_KEY
+INSTANCE_SECRET
+POSTGRES_URL
+POSTGRES_PASSWORD
 ```
 
 ## Root Scripts
@@ -109,8 +154,11 @@ OPENAI_MODEL
     "convex:deploy": "pnpm --filter @icarun/mobile convex:deploy",
     "build": "pnpm --filter @icarun/mobile build",
     "typecheck": "pnpm -r typecheck",
-    "railway:build": "pnpm --filter @icarun/mobile convex:deploy",
-    "start": "serve apps/mobile/dist --single"
+    "railway:build": "pnpm run railway:build:frontend",
+    "railway:build:frontend": "pnpm --filter @icarun/mobile convex:deploy",
+    "railway:start": "pnpm run railway:start:frontend",
+    "railway:start:frontend": "serve apps/mobile/dist --single",
+    "start": "pnpm run railway:start:frontend"
   }
 }
 ```
@@ -134,9 +182,12 @@ OPENAI_MODEL
 
 `pnpm --filter @icarun/mobile convex:dev` configures a deployment, pushes functions, and regenerates `convex/_generated`.
 
+For self-hosted production deploy, set `CONVEX_SELF_HOSTED_URL` and `CONVEX_SELF_HOSTED_ADMIN_KEY` on the Railway frontend service, then run `pnpm run railway:build:frontend`.
+
 Generated files under `apps/mobile/convex/_generated/` should be committed.
 
 Local files under `apps/mobile/.convex/` and `apps/mobile/.env.local` should not be committed.
+
 ## Railway pnpm/Corepack Note
 
 Do not add the legacy top-level `packageManager` field or pnpm 11 `devEngines.packageManager` back to the root `package.json` without re-validating Railway. The top-level `packageManager` previously routed pnpm through Corepack, and `devEngines.packageManager` caused pnpm 11 to write an extra `packageManagerDependencies` YAML document that Railway pnpm 9 rejected with `ERR_PNPM_BROKEN_LOCKFILE`.

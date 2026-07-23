@@ -2,7 +2,7 @@
 
 ## Current Status
 
-The project has been migrated from the prior PostgreSQL + Drizzle + Express plan to a Convex-backed architecture.
+The project has been migrated from the prior PostgreSQL + Drizzle + Express plan to a Convex-backed architecture, and deployment is now being reworked for Railway self-hosted Convex without Docker Compose.
 
 Current implemented structure includes:
 
@@ -12,10 +12,11 @@ pnpm-lock.yaml
 pnpm-workspace.yaml
 .env.example
 .gitignore
+railway.json
 apps/mobile/
-  app/
-  src/
-  convex/
+services/convex-backend/
+services/convex-dashboard/
+services/database/
 ```
 
 ## Recent Changes
@@ -32,42 +33,43 @@ apps/mobile/
 - Added AI command bar using preview -> confirm -> execute.
 - Added ADR 0002: Use Convex.
 - Marked ADR 0001 as superseded.
-- Updated project rules, docs, README, and memory bank for Convex.
 - Updated mobile dependencies to Expo SDK 57-compatible versions.
 - Verified updated dependencies with Expo dependency check, peer check, typecheck, and web build.
-- Added Railway deployment config for release-branch GitHub autodeploy.
-- Added root Railway build/start scripts and `serve` for SPA hosting.
+- Added Railway config-as-code for frontend SPA hosting.
 - Pinned Railway/Nixpacks Node runtime to Node.js 22 LTS.
-- Removed the root top-level `packageManager` field so Railway/Nixpacks avoids the Corepack pnpm shim that failed on Node 24.10.0.
-- Removed pnpm 11 `devEngines.packageManager` and regenerated `pnpm-lock.yaml` as a single YAML document for Railway pnpm 9 compatibility.
+- Removed root top-level `packageManager` and pnpm 11 `devEngines.packageManager` for Railway pnpm compatibility.
+- Added `services/*` to the pnpm workspace.
+- Added service wrapper packages for self-hosted Convex backend, Convex dashboard, and PostgreSQL.
+- Added per-service Railway config files instead of Docker Compose.
 
 ## Current Direction
 
-Use Convex as the database and backend source of truth.
+Use Railway as the deployment platform for all services, managed from one repository through pnpm workspace packages:
 
-Main reasons:
+```txt
+frontend           @icarun/mobile
+convex-backend     @icarun/convex-backend
+convex-dashboard   @icarun/convex-dashboard
+database           @icarun/database
+```
 
-- user requested Convex
-- realtime updates
-- TypeScript functions
-- no ORM/migration layer
-- simpler AI action model
-- no Express REST API server needed for MVP
+Use Convex as the application database/backend source of truth. PostgreSQL is only self-hosted Convex's internal persistence layer.
 
 ## Immediate Next Steps
 
-1. Run Convex dev validation if backend functions or generated files change again.
-2. Ensure local runtime state is ignored.
-3. Commit generated Convex files but not local `.convex/` data.
-4. Configure real Convex production deployment.
-5. Set OpenAI-compatible provider env vars on Convex.
-6. Configure Railway GitHub service branch to `release` and set `CONVEX_DEPLOY_KEY`.
-7. Push the release branch and verify Railway deploy logs.
+1. Configure Railway services from the same repository.
+2. Point each Railway service at its service-specific `railway.json`.
+3. Attach a volume to the `database` service at `/var/lib/postgresql/data`.
+4. Set backend, dashboard, database, and frontend variables in Railway.
+5. Generate the self-hosted Convex admin key with `railway ssh` on `convex-backend`.
+6. Set `CONVEX_SELF_HOSTED_ADMIN_KEY` on the frontend service.
+7. Deploy frontend so `convex deploy` pushes functions to self-hosted Convex and exports the Expo Web SPA.
 8. Perform a full browser UI smoke test.
 
 ## Open Decisions
 
-- Railway is the selected static SPA host for release-branch deployment.
+- Whether to use Railway's managed PostgreSQL template instead of the repository-managed `services/database` image wrapper later.
+- Whether to expose Convex HTTP actions on a separate domain/port if `convex/http.ts` is added later.
 - Whether to add full authentication later.
 - Whether to add rate limiting / quotas for AI actions.
 - Whether to normalize tags after MVP.
@@ -75,14 +77,15 @@ Main reasons:
 
 ## Active Warnings
 
-- Do not use PostgreSQL, Drizzle ORM, drizzle-kit, Prisma, or Express unless explicitly requested.
+- Do not use Docker Compose for Railway deployment.
+- Railway `railway.json` is single-service config; use one config file per service package.
+- Do not use PostgreSQL directly from app code; it is only Convex internal persistence.
+- Do not introduce Drizzle ORM, drizzle-kit, Prisma, or Express.
 - Do not expose OpenAI secrets to Expo.
+- Do not expose `CONVEX_SELF_HOSTED_ADMIN_KEY` to Expo client code.
 - Do not use Expo `web.output: 'static'` with dynamic task routes.
 - Do not commit local Convex runtime state (`apps/mobile/.convex/`).
 - Do not commit private local env files (`apps/mobile/.env.local`).
 - Convex generated files under `apps/mobile/convex/_generated/` are required for typecheck and should be committed.
-- Railway cannot read the release branch trigger from `railway.json`; set the service source branch to `release` in Railway.
-- Railway requires `CONVEX_DEPLOY_KEY` as a service variable for `convex deploy` during build.
-- Railway uses Nixpacks detected `pnpm-9_x`; avoid top-level `packageManager` and `devEngines.packageManager` in root package.json unless Railway is revalidated.
-
-- Do not reintroduce root package-manager pinning fields without re-validating Railway install logs; they can either route pnpm through Corepack or make pnpm 11 write lockfile metadata that pnpm 9 cannot parse.
+- Railway source branch remains a service setting in Railway.
+- Do not reintroduce root package-manager pinning fields without re-validating Railway install logs.

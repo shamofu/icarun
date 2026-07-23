@@ -2,15 +2,15 @@
 
 icarun is a task management application inspired by Bluesky's Expo / React Native / React Native Web architecture.
 
-The app is now designed as a Convex-backed SPA:
+The app is now designed as a Convex-backed SPA deployed from a pnpm workspace to Railway services:
 
 ```txt
 Expo / React Native Web SPA
         |
         | convex/react
         v
-Convex backend
-        +--> Convex database
+Self-hosted Convex backend on Railway
+        +--> PostgreSQL persistence used internally by Convex
         +--> Convex actions for OpenAI-compatible Chat Completions API
 ```
 
@@ -53,6 +53,11 @@ icarun/
       app/
       src/
       convex/
+
+  services/
+    convex-backend/
+    convex-dashboard/
+    database/
 ```
 
 ## Frontend
@@ -190,6 +195,30 @@ apps/mobile/dist
 ```
 
 Host that directory with any static hosting provider that supports SPA fallback to `index.html`.
+
+
+## Railway Monorepo Services
+
+Docker Compose is not used for Railway deployment. This repository is a pnpm workspace that manages all Railway services from one GitHub repository:
+
+```txt
+@icarun/mobile             -> frontend SPA
+@icarun/convex-backend     -> self-hosted Convex backend image wrapper
+@icarun/convex-dashboard   -> self-hosted Convex dashboard image wrapper
+@icarun/database           -> PostgreSQL image wrapper for Convex persistence
+```
+
+Railway `railway.json` config-as-code applies to one service/deployment, so each deployable service has its own config file:
+
+```txt
+railway.json
+apps/mobile/railway.json
+services/convex-backend/railway.json
+services/convex-dashboard/railway.json
+services/database/railway.json
+```
+
+Create separate Railway services from the same repository and point each service at the matching config file path. PostgreSQL is only used internally by self-hosted Convex; application code continues to use Convex queries, mutations, and actions.
 
 ## Documentation
 
