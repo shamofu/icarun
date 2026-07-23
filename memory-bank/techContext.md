@@ -90,46 +90,39 @@ services/database/railway.json
 
 ## Environment Variables
 
-Frontend-safe:
+Recommended Railway reference variable wiring:
 
 ```env
-EXPO_PUBLIC_CONVEX_URL=https://your-convex-backend.up.railway.app
-```
+# frontend service
+EXPO_PUBLIC_CONVEX_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
+CONVEX_SELF_HOSTED_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
+CONVEX_SELF_HOSTED_ADMIN_KEY=${{ shared.CONVEX_SELF_HOSTED_ADMIN_KEY }}
 
-Frontend build/deploy secret for self-hosted Convex:
-
-```env
-CONVEX_SELF_HOSTED_URL=https://your-convex-backend.up.railway.app
-CONVEX_SELF_HOSTED_ADMIN_KEY=your-admin-key
-```
-
-Convex backend server-only:
-
-```env
+# convex-backend service
+PORT=3210
 INSTANCE_SECRET=replace-with-a-long-random-secret
 INSTANCE_NAME=convex-self-hosted
-POSTGRES_URL=postgresql://convex:password@database.railway.internal:5432
+POSTGRES_URL=postgresql://${{ database.POSTGRES_USER }}:${{ database.POSTGRES_PASSWORD }}@${{ database.RAILWAY_PRIVATE_DOMAIN }}:5432
 DO_NOT_REQUIRE_SSL=1
-CONVEX_CLOUD_ORIGIN=https://your-convex-backend.up.railway.app
-CONVEX_SITE_ORIGIN=https://your-convex-backend.up.railway.app
+CONVEX_CLOUD_ORIGIN=https://${{ RAILWAY_PUBLIC_DOMAIN }}
+CONVEX_SITE_ORIGIN=https://${{ RAILWAY_PUBLIC_DOMAIN }}
 OPENAI_API_KEY=sk-your-key
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4.1-mini
-```
 
-Dashboard:
+# convex-dashboard service
+NEXT_PUBLIC_DEPLOYMENT_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
 
-```env
-NEXT_PUBLIC_DEPLOYMENT_URL=https://your-convex-backend.up.railway.app
-```
-
-Database:
-
-```env
+# database service
 POSTGRES_USER=convex
 POSTGRES_PASSWORD=replace-with-db-password
 POSTGRES_DB=convex_self_hosted
+PGDATA=/var/lib/postgresql/data/pgdata
 ```
+
+Public Railway domains are required for browser-facing Convex URLs. Railway private domains are used only for `convex-backend` -> `database` traffic.
+
+`/version` on the Convex backend may return `unknown`; HTTP 200 and Railway healthy status are the success criteria.
 
 Never expose these to the frontend as public Expo variables:
 

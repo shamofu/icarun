@@ -52,7 +52,29 @@ database
   package: @icarun/database
   image wrapper: postgres:17
   volume: /var/lib/postgresql/data
+  pgdata: /var/lib/postgresql/data/pgdata
 ```
+
+
+## Railway Variable Reference Pattern
+
+Use Railway reference variables to avoid duplicated service values:
+
+```env
+# convex-backend -> database over private networking
+POSTGRES_URL=postgresql://${{ database.POSTGRES_USER }}:${{ database.POSTGRES_PASSWORD }}@${{ database.RAILWAY_PRIVATE_DOMAIN }}:5432
+
+# browser-facing Convex URLs use the backend public domain
+CONVEX_CLOUD_ORIGIN=https://${{ RAILWAY_PUBLIC_DOMAIN }}
+CONVEX_SITE_ORIGIN=https://${{ RAILWAY_PUBLIC_DOMAIN }}
+EXPO_PUBLIC_CONVEX_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
+CONVEX_SELF_HOSTED_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
+NEXT_PUBLIC_DEPLOYMENT_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
+```
+
+Public-vs-private rule: browser/client-facing values use Railway public domains; server-to-server database traffic uses Railway private domains. Do not put `RAILWAY_PRIVATE_DOMAIN` into Expo public variables.
+
+Convex backend should set `PORT=3210`, and its Railway Public Networking target port should be `3210`. `/version` returning `unknown` is acceptable when the HTTP status is 200.
 
 ## Frontend Pattern
 
@@ -100,7 +122,7 @@ apps/mobile/convex/schema.ts
 
 Convex automatically adds `_id` and `_creationTime`. Map them to app-facing `id` and `createdAt` in serializers.
 
-Self-hosted Convex persists internally to PostgreSQL on Railway. The Convex `POSTGRES_URL` must not include the database name or query parameters. With `INSTANCE_NAME=convex-self-hosted`, the database name is `convex_self_hosted`.
+Self-hosted Convex persists internally to PostgreSQL on Railway. The Convex `POSTGRES_URL` must not include the database name or query parameters. With `INSTANCE_NAME=convex-self-hosted`, the database name is `convex_self_hosted`. Railway PostgreSQL must use `PGDATA=/var/lib/postgresql/data/pgdata` so `initdb` does not fail on a volume mount root containing `lost+found`.
 
 ## AI Safety Pattern
 

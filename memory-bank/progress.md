@@ -38,6 +38,9 @@
 - Service packages added for `@icarun/convex-backend`, `@icarun/convex-dashboard`, and `@icarun/database`.
 - Service-specific `railway.json` files added for frontend, Convex backend, Convex dashboard, and database.
 - Docker Compose plan abandoned per user request.
+- Railway Convex backend healthcheck mitigation identified: set `PORT=3210` and Public Networking target port `3210`.
+- Railway database `lost+found` mitigation identified: set `PGDATA=/var/lib/postgresql/data/pgdata`.
+- Railway deployment docs updated with reference variables, `PGDATA`, `PORT=3210`, and `/version` `unknown` guidance.
 
 ## Not Started / Remaining
 
@@ -66,12 +69,34 @@ Mitigation:
 
 ### Database service persistence
 
-The repository-managed PostgreSQL service requires a Railway volume at `/var/lib/postgresql/data`.
+The repository-managed PostgreSQL service requires a Railway volume at `/var/lib/postgresql/data` and `PGDATA=/var/lib/postgresql/data/pgdata`.
 
 Mitigation:
 
 - attach the volume before production use
+- set `PGDATA=/var/lib/postgresql/data/pgdata` to avoid `lost+found` initdb failures
 - keep backend and database in the same Railway region
+
+
+### Railway Convex backend public port
+
+The self-hosted Convex backend listens on `3210` for the API and `3211` for HTTP actions. Railway healthcheck and Public Networking must target `3210` for the current app.
+
+Mitigation:
+
+- set `PORT=3210` on `convex-backend`
+- set the `convex-backend` public domain target port to `3210`
+- treat `/version` returning `unknown` as healthy when HTTP status is 200
+
+### Railway reference variable safety
+
+Railway reference variables reduce duplication but must preserve network boundaries.
+
+Mitigation:
+
+- use public domains for browser-facing Convex URLs
+- use private domains only for `convex-backend` -> `database`
+- store `CONVEX_SELF_HOSTED_ADMIN_KEY` directly on frontend or as a sealed shared variable, never as `EXPO_PUBLIC_*`
 
 ### Convex self-host admin key
 
@@ -139,7 +164,7 @@ The MVP is complete when:
 - `pnpm typecheck` succeeds
 - `pnpm build` succeeds
 - Railway database service persists data on a volume
-- self-hosted Convex backend deploys and `/version` works
+- self-hosted Convex backend deploys and `/version` returns HTTP 200, even if the body is `unknown`
 - Convex dashboard can log in with generated admin key
 - Convex functions are deployed to the self-hosted backend
 - `api.health.check` works from the frontend

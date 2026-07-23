@@ -10,6 +10,10 @@ Never expose these to Expo client code:
 OPENAI_API_KEY
 OPENAI_BASE_URL
 OPENAI_MODEL
+CONVEX_SELF_HOSTED_ADMIN_KEY
+INSTANCE_SECRET
+POSTGRES_URL
+POSTGRES_PASSWORD
 ```
 
 Only frontend-safe variables may use the `EXPO_PUBLIC_` prefix.
@@ -29,6 +33,29 @@ npx convex env set OPENAI_API_KEY sk-your-key
 npx convex env set OPENAI_BASE_URL https://api.openai.com/v1
 npx convex env set OPENAI_MODEL gpt-4.1-mini
 ```
+
+
+## Railway Domain and Reference Variable Safety
+
+Use Railway public domains for browser-facing Convex URLs:
+
+```env
+EXPO_PUBLIC_CONVEX_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
+CONVEX_SELF_HOSTED_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
+NEXT_PUBLIC_DEPLOYMENT_URL=${{ convex-backend.CONVEX_CLOUD_ORIGIN }}
+```
+
+These values ultimately resolve to `https://${{ RAILWAY_PUBLIC_DOMAIN }}` on the `convex-backend` service. They must be public because Expo Web and the Convex dashboard run in the user's browser.
+
+Use Railway private domains only for server-to-server traffic, currently the backend-to-database connection:
+
+```env
+POSTGRES_URL=postgresql://${{ database.POSTGRES_USER }}:${{ database.POSTGRES_PASSWORD }}@${{ database.RAILWAY_PRIVATE_DOMAIN }}:5432
+```
+
+Do not put `RAILWAY_PRIVATE_DOMAIN` or `*.railway.internal` names into `EXPO_PUBLIC_*` variables; browsers cannot resolve Railway private DNS names.
+
+Store `CONVEX_SELF_HOSTED_ADMIN_KEY` as a frontend build/deploy secret only. Prefer a sealed Railway shared variable referenced as `${{ shared.CONVEX_SELF_HOSTED_ADMIN_KEY }}`. Never prefix it with `EXPO_PUBLIC_`.
 
 ## AI Safety
 

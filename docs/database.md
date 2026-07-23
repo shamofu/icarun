@@ -112,6 +112,33 @@ Use `v.array(v.string())` for tags in the MVP.
 
 If tag management becomes complex later, add normalized documents or derived indexes as needed.
 
+
+## Self-hosted PostgreSQL on Railway
+
+PostgreSQL is only used as the internal persistence layer for self-hosted Convex on Railway. Application code must still use Convex queries, mutations, and actions rather than connecting to PostgreSQL directly.
+
+When using the repository-managed `postgres:17` service on Railway, attach the volume at:
+
+```txt
+/var/lib/postgresql/data
+```
+
+Set PostgreSQL's data directory to a subdirectory under that mount:
+
+```env
+PGDATA=/var/lib/postgresql/data/pgdata
+```
+
+Railway volumes can contain `lost+found` at the mount root. If PostgreSQL initializes directly in `/var/lib/postgresql/data`, `initdb` may fail with `directory exists but is not empty`. Using the `pgdata` subdirectory avoids that failure while keeping the data on the persistent volume.
+
+Convex connects to Postgres with a URL that does not include the database name:
+
+```env
+POSTGRES_URL=postgresql://${{ database.POSTGRES_USER }}:${{ database.POSTGRES_PASSWORD }}@${{ database.RAILWAY_PRIVATE_DOMAIN }}:5432
+```
+
+With `INSTANCE_NAME=convex-self-hosted`, Convex uses the database named `convex_self_hosted`.
+
 ## Codegen / Deployment Policy
 
 Run Convex tooling when schema or functions change:

@@ -41,6 +41,9 @@ services/database/
 - Added `services/*` to the pnpm workspace.
 - Added service wrapper packages for self-hosted Convex backend, Convex dashboard, and PostgreSQL.
 - Added per-service Railway config files instead of Docker Compose.
+- Documented Convex backend `PORT=3210`, Public Networking target port `3210`, and `/version` returning `unknown` as acceptable with HTTP 200.
+- Documented Railway PostgreSQL `PGDATA=/var/lib/postgresql/data/pgdata` to avoid `lost+found` initdb failures.
+- Documented Railway reference variable wiring across frontend, Convex backend, Convex dashboard, and database services.
 
 ## Current Direction
 
@@ -57,14 +60,13 @@ Use Convex as the application database/backend source of truth. PostgreSQL is on
 
 ## Immediate Next Steps
 
-1. Configure Railway services from the same repository.
-2. Point each Railway service at its service-specific `railway.json`.
-3. Attach a volume to the `database` service at `/var/lib/postgresql/data`.
-4. Set backend, dashboard, database, and frontend variables in Railway.
-5. Generate the self-hosted Convex admin key with `railway ssh` on `convex-backend`.
-6. Set `CONVEX_SELF_HOSTED_ADMIN_KEY` on the frontend service.
-7. Deploy frontend so `convex deploy` pushes functions to self-hosted Convex and exports the Expo Web SPA.
-8. Perform a full browser UI smoke test.
+1. Finish Railway service configuration with reference variables.
+2. Ensure database has `PGDATA=/var/lib/postgresql/data/pgdata` and a volume at `/var/lib/postgresql/data`.
+3. Ensure convex-backend has `PORT=3210`, Public Networking target port `3210`, and `/version` returns HTTP 200.
+4. Generate the self-hosted Convex admin key with `railway ssh` on `convex-backend`.
+5. Set `CONVEX_SELF_HOSTED_ADMIN_KEY` on the frontend service directly or via a sealed shared variable.
+6. Deploy frontend so `convex deploy` pushes functions to self-hosted Convex and exports the Expo Web SPA.
+7. Perform a full browser UI smoke test.
 
 ## Open Decisions
 
@@ -89,3 +91,7 @@ Use Convex as the application database/backend source of truth. PostgreSQL is on
 - Convex generated files under `apps/mobile/convex/_generated/` are required for typecheck and should be committed.
 - Railway source branch remains a service setting in Railway.
 - Do not reintroduce root package-manager pinning fields without re-validating Railway install logs.
+
+- Railway PostgreSQL must use `PGDATA=/var/lib/postgresql/data/pgdata`; using the volume mount root directly can fail because of `lost+found`.
+- Convex backend Public Networking must target port `3210`; `/version` may return `unknown` but must return HTTP 200.
+- Use Railway public domains for browser-facing Convex URLs and private domains only for backend-to-database traffic.

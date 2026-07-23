@@ -218,7 +218,7 @@ services/convex-dashboard/railway.json
 services/database/railway.json
 ```
 
-Create separate Railway services from the same repository and point each service at the matching config file path. PostgreSQL is only used internally by self-hosted Convex; application code continues to use Convex queries, mutations, and actions.
+Create separate Railway services from the same repository and point each service at the matching config file path. PostgreSQL is only used internally by self-hosted Convex; application code continues to use Convex queries, mutations, and actions. See `docs/deployment.md` for Railway reference variable wiring, `PGDATA=/var/lib/postgresql/data/pgdata`, `PORT=3210`, and public-vs-private domain rules.
 
 ## Documentation
 
