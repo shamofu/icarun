@@ -216,11 +216,23 @@ Never execute AI output immediately from preview.
 
 ## Phase 11 — Deployment
 
-Deploy Convex backend and build the frontend:
+Build the frontend independently of the backend:
 
 ```bash
-pnpm --filter @icarun/mobile convex:deploy
+pnpm build
 ```
+
+Deploy Convex functions separately:
+
+```bash
+pnpm convex:deploy
+```
+
+On Railway, run bounded function-environment synchronization and Convex deploy
+in pre-deploy. GitHub Actions orders database -> Convex backend -> dashboard ->
+frontend and waits for each deployment/readiness check. Runtime dependency waits
+remain bounded so independent manual restarts can tolerate dependencies becoming
+ready within the overall deadline.
 
 Static build output:
 

@@ -1,6 +1,9 @@
 # dependencies
 node_modules/
 
+# Claude Code temporary worktrees
+.claude/worktrees/
+
 # expo / metro
 .expo/
 dist/

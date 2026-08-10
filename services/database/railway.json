@@ -3,7 +3,8 @@
   "build": {
     "builder": "DOCKERFILE",
     "watchPatterns": [
-      "/services/database/**"
+      "/services/database/**",
+      "/.gitattributes"
     ],
     "dockerfilePath": "services/database/Dockerfile"
   },

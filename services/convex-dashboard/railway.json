@@ -3,7 +3,8 @@
   "build": {
     "builder": "DOCKERFILE",
     "watchPatterns": [
-      "/services/convex-dashboard/**"
+      "/services/convex-dashboard/**",
+      "/.gitattributes"
     ],
     "dockerfilePath": "services/convex-dashboard/Dockerfile"
   },
@@ -11,6 +12,7 @@
     "startCommand": null,
     "healthcheckPath": "/",
     "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 3
+    "restartPolicyMaxRetries": 10,
+    "healthcheckTimeout": 600
   }
 }

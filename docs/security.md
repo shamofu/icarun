@@ -28,7 +28,7 @@ EXPO_PUBLIC_CONVEX_SITE_URL=http://127.0.0.1:3211
 
 `EXPO_PUBLIC_CONVEX_URL` and `EXPO_PUBLIC_CONVEX_SITE_URL` are public deployment URLs, not secrets. The site URL is required for Better Auth HTTP routes.
 
-Set server-only secrets in the Convex deployment/backend environment:
+Set server-only secrets in the Convex **deployment function environment** (not merely the Railway backend container):
 
 ```bash
 npx convex env set OPENAI_API_KEY sk-your-key
@@ -57,19 +57,22 @@ Use public domains for browser-facing Convex URLs:
 ```env
 EXPO_PUBLIC_CONVEX_URL=https://<convex-api-public-domain>
 EXPO_PUBLIC_CONVEX_SITE_URL=https://<convex-site-public-domain>
-CONVEX_SELF_HOSTED_URL=https://<convex-api-public-domain>
 NEXT_PUBLIC_DEPLOYMENT_URL=https://<convex-api-public-domain>
 ```
 
-Use Railway private domains only for server-to-server traffic, currently backend-to-database:
+Use Railway private domains only for server-to-server traffic:
 
 ```env
 POSTGRES_URL=postgresql://${{ database.POSTGRES_USER }}:${{ database.POSTGRES_PASSWORD }}@${{ database.RAILWAY_PRIVATE_DOMAIN }}:5432
+CONVEX_SELF_HOSTED_URL=http://${{ convex-backend.RAILWAY_PRIVATE_DOMAIN }}:3210
 ```
+
+`CONVEX_SELF_HOSTED_URL` is consumed only by the frontend service's Railway
+pre-deploy command. It must not be referenced by Expo client code.
 
 Do not put `RAILWAY_PRIVATE_DOMAIN` or `*.railway.internal` names into `EXPO_PUBLIC_*` variables; browsers cannot resolve Railway private DNS names.
 
-Store `CONVEX_SELF_HOSTED_ADMIN_KEY` as a frontend build/deploy secret only. Prefer a sealed Railway shared variable referenced as `${{ shared.CONVEX_SELF_HOSTED_ADMIN_KEY }}`. Never prefix it with `EXPO_PUBLIC_`.
+Store `CONVEX_SELF_HOSTED_ADMIN_KEY`, `CONVEX_ENV_BETTER_AUTH_SECRET`, and optional `CONVEX_ENV_OPENAI_API_KEY` as sealed variables on the privileged Railway frontend service. Never prefix them with `EXPO_PUBLIC_`. Pre-deploy sends function values to Convex over stdin; the static-server launcher deletes deploy-only variables from its environment before serving. A dedicated fifth deployer/CI job remains the stricter least-privilege option.
 
 ## AI Safety
 

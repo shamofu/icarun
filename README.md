@@ -156,7 +156,7 @@ npx convex env set BETTER_AUTH_SECRET <long-random-secret>
 npx convex env set SITE_URL <frontend-origin>
 ```
 
-Never expose `OPENAI_API_KEY`, `BETTER_AUTH_SECRET`, or `CONVEX_SELF_HOSTED_ADMIN_KEY` to frontend code.
+Never expose `OPENAI_API_KEY`, `BETTER_AUTH_SECRET`, or `CONVEX_SELF_HOSTED_ADMIN_KEY` to frontend code. On Railway, prefixed `CONVEX_ENV_*` sources are synchronized as unprefixed values into the Convex function environment during pre-deploy and scrubbed before the static server starts.
 
 ## Development
 
@@ -192,11 +192,22 @@ pnpm build
 
 ## Deployment
 
-Deploy Convex backend and build the frontend:
+Build the frontend SPA without contacting a running backend:
 
 ```bash
-pnpm --filter @icarun/mobile convex:deploy
+pnpm build
 ```
+
+Deploy Convex functions separately when running outside Railway:
+
+```bash
+pnpm convex:deploy
+```
+
+On Railway, the frontend build only exports Expo. A bounded pre-deploy command
+waits for Convex, synchronizes required function environment variables, and
+pushes functions before the new frontend becomes active. Its static-server
+launcher removes all deploy-only credentials before serving traffic.
 
 The generated web build is written to:
 
@@ -227,6 +238,15 @@ EXPO_PUBLIC_CONVEX_SITE_URL=https://<convex-site-public-domain> # routes to 3211
 Expose both origins from the single `convex-backend` service: in its Railway Public Networking section, generate one domain targeting port `3210` (API) and one targeting port `3211` (HTTP actions / Better Auth). See `docs/deployment.md` for the full Railway variable list.
 
 Railway Skipped Builds are configured through `build.watchPatterns` in each service `railway.json`. The frontend service uses Railpack (`build.builder: "RAILPACK"`); the Convex backend, dashboard, and database services remain Dockerfile builders because they wrap official upstream images.
+
+After services, volumes, domains, and secrets are configured,
+`.github/workflows/deploy-railway.yml` validates the app and deploys the services
+in dependency order: database, Convex backend, dashboard, then frontend. Disable
+Railway's GitHub source autodeploy so Actions is the only push trigger. Runtime
+bounded PostgreSQL/Convex waits remain in place for independent restarts and
+manual redeploys. See `docs/deployment.md` for the required GitHub Environment
+settings, bootstrap, function-environment sync, pinned images, and timeout
+controls.
 
 ## Documentation
 

@@ -18,9 +18,10 @@
     "build": "pnpm --filter @icarun/mobile build",
     "typecheck": "pnpm -r typecheck",
     "railway:build": "pnpm run railway:build:frontend",
-    "railway:build:frontend": "pnpm --filter @icarun/mobile convex:deploy",
+    "railway:build:frontend": "pnpm --filter @icarun/mobile build",
+    "railway:deploy:frontend": "pnpm --filter @icarun/mobile railway:deploy",
     "railway:start": "pnpm run railway:start:frontend",
-    "railway:start:frontend": "serve apps/mobile/dist --single",
+    "railway:start:frontend": "node apps/mobile/scripts/start-frontend.mjs",
     "start": "pnpm run railway:start:frontend"
   },
   "dependencies": {

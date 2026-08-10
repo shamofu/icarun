@@ -47,6 +47,14 @@
 - Tasks now include optional `ownerId`; new task operations require authentication and write `ownerId`.
 - Task CRUD and AI preview/execute are scoped to the authenticated user.
 - Railway frontend config now uses Railpack instead of Nixpacks, and all service Watch Paths are normalized for Skipped Builds.
+- Railway runtime restarts are order-independent after one-time setup; bounded waits cover independent manual restarts while GitHub Actions orders push deployments.
+- Convex backend now performs a bounded PostgreSQL TCP reachability wait before the official entrypoint.
+- Expo export and Convex function deployment are separated; Railway pushes functions from a bounded, retrying pre-deploy command.
+- Offline admin-key bootstrapping from stable Convex instance credentials is documented for simultaneous first deploys.
+- Pre-deploy now synchronizes required Convex function variables over stdin, enforces overall/per-CLI deadlines, and strips deploy secrets before SPA serving.
+- Convex backend/dashboard images are pinned to the same immutable revision.
+- GitHub Actions now validates the app and deploys database -> Convex backend -> dashboard -> frontend, polling exact Railway deployment IDs and public readiness before advancing.
+- Actions maps `main` to Railway `development` and `release` to Railway `production`; runs are serialized per environment without canceling in-flight Railway deployments, and required Railway/GitHub Environment configuration is validated before upload.
 
 ## Not Started / Remaining
 
@@ -55,10 +63,11 @@
 - Attach Railway volume to the database service at `/var/lib/postgresql/data`.
 - Configure production self-hosted Convex backend environment variables.
 - Expose Convex HTTP actions/site origin on port `3211` for Better Auth.
-- Generate self-hosted Convex admin key via `railway ssh` and `./generate_admin_key.sh`.
-- Configure frontend variables `CONVEX_SELF_HOSTED_URL`, `CONVEX_SELF_HOSTED_ADMIN_KEY`, `EXPO_PUBLIC_CONVEX_URL`, `EXPO_PUBLIC_CONVEX_SITE_URL`, and `SITE_URL`.
-- Full browser UI smoke test after Railway deployment.
-- Real AI preview call with a configured `OPENAI_API_KEY`.
+- Generate the self-hosted Convex admin key offline from the production `INSTANCE_NAME` / `INSTANCE_SECRET`, then store it as a sealed Railway variable.
+- Configure frontend public URLs, Convex deploy credentials, required `CONVEX_ENV_BETTER_AUTH_SECRET` / `CONVEX_ENV_SITE_URL`, and optional OpenAI sources.
+- Disable Railway GitHub source autodeploy and configure the GitHub `development` / `production` Environments with their Railway IDs, Project Tokens, and health URLs.
+- Full browser UI smoke test after the GitHub Actions Railway deployment.
+- Real AI preview call after synchronizing `CONVEX_ENV_OPENAI_API_KEY`.
 - Rate limiting / quotas.
 
 ## Known Risks
@@ -101,18 +110,42 @@ Railway reference variables reduce duplication but must preserve network boundar
 Mitigation:
 
 - use public domains for browser-facing Convex URLs
-- use private domains only for `convex-backend` -> `database`
-- store `CONVEX_SELF_HOSTED_ADMIN_KEY` directly on frontend or as a sealed shared variable, never as `EXPO_PUBLIC_*`
+- use private domains for `convex-backend` -> `database` and frontend-pre-deploy -> `convex-backend` traffic
+- store the admin key and `CONVEX_ENV_*` secrets as sealed frontend deployment variables, never as `EXPO_PUBLIC_*`
+- remember frontend pre-deploy is privileged in the four-service topology; runtime scrubs secrets before serving
 
 ### Convex self-host admin key
 
-Self-hosted Convex deploy requires an admin key generated from the backend container.
+Self-hosted Convex deploy requires an admin key derived from the same stable `INSTANCE_NAME` and `INSTANCE_SECRET` used by the backend.
 
 Mitigation:
 
-- run `railway ssh` on `convex-backend`
-- run `./generate_admin_key.sh`
-- store the resulting key only as `CONVEX_SELF_HOSTED_ADMIN_KEY` on the frontend build/deploy service
+- generate the key before first deploy with the official image's local `generate_admin_key.sh`
+- set the exact same instance name/secret on `convex-backend`
+- store the derived key only as sealed `CONVEX_SELF_HOSTED_ADMIN_KEY` on the frontend build/deploy service
+- do not rotate one of these values independently
+
+### Bounded Railway dependency waits
+
+The backend depends on PostgreSQL TCP reachability, and the frontend pre-deploy step depends on Convex readiness. Railway uses reference variables for batched startup ordering, but GitHub push deploys run independently.
+
+Mitigation:
+
+- wait for PostgreSQL in the backend image wrapper (600-second default)
+- use a longer backend healthcheck timeout (900 seconds)
+- apply one overall deadline plus per-CLI deadlines to env sync and function deploy
+- wait for `/version`, synchronize Convex function env, and retry `convex deploy`
+- fail clearly rather than waiting indefinitely; Railway will not retry pre-deploy, so redeploy frontend after correcting/waiting
+
+### Convex image upgrades
+
+Backend and dashboard are pinned to the same immutable upstream revision. Self-hosted backend upgrades may run database migrations.
+
+Mitigation:
+
+- update both Dockerfiles to the same upstream revision
+- export/backup Convex data and save function environment before upgrade
+- review migration logs and upstream upgrade guidance
 
 ### Convex generated files
 
@@ -140,7 +173,7 @@ Railway services may skip builds when changed files do not match `build.watchPat
 Mitigation:
 
 - keep frontend watch paths aligned with all files that affect Expo/Convex deploys
-- keep Dockerfile image-wrapper service watch paths limited to their own service directories
+- keep Dockerfile image-wrapper service watch paths limited to their own directories plus `/.gitattributes`
 - manually redeploy from Railway when intentionally changing service settings outside watched paths
 
 ### Railway pnpm/Corepack compatibility
@@ -162,7 +195,7 @@ Static hosting may break `/tasks/[id]` refresh if no SPA fallback is configured.
 Mitigation:
 
 - use `web.output: 'single'`
-- use `serve apps/mobile/dist --single`
+- use `apps/mobile/scripts/start-frontend.mjs` to scrub deploy secrets and run `serve --single`
 
 ## MVP Completion Checklist
 

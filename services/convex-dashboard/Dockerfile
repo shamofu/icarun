@@ -1,1 +1,1 @@
-FROM ghcr.io/get-convex/convex-dashboard:latest
+FROM ghcr.io/get-convex/convex-dashboard:19431ea0dd90bc55ae58dbbd06d9aa045f97336f@sha256:5f4620ca0640ed863a8c5109123b9831157e889c6294e28c5e96ea0a62375efb

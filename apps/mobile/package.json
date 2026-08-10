@@ -10,8 +10,9 @@
     "ios": "expo start --ios",
     "build": "expo export --platform web --output-dir dist",
     "convex:dev": "convex dev",
-    "convex:deploy": "convex deploy --cmd-url-env-var-name EXPO_PUBLIC_CONVEX_URL --cmd \"expo export --platform web --output-dir dist\"",
-    "typecheck": "tsc --noEmit"
+    "convex:deploy": "convex deploy",
+    "typecheck": "tsc --noEmit",
+    "railway:deploy": "node scripts/deploy-convex-with-retry.mjs"
   },
   "dependencies": {
     "@babel/runtime": "^7.26.0",

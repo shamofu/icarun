@@ -1,0 +1,4 @@
+# Container entrypoints and scripts must retain Unix line endings on Windows.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.mjs text eol=lf

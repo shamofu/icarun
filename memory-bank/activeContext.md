@@ -49,6 +49,13 @@ services/database/
 - Added per-user task isolation with `ownerId`.
 - Scoped AI preview/execute to the authenticated user's tasks.
 - Updated frontend Railway builder from Nixpacks to Railpack and normalized all Railway Watch Paths for Skipped Builds.
+- Made Railway runtime restarts order-independent with bounded dependency waits.
+- Added a Convex backend wrapper that waits for PostgreSQL before invoking the official entrypoint.
+- Split Expo export from `convex deploy`; Railway now pushes functions in a bounded, retrying pre-deploy command over private networking.
+- Documented offline admin-key generation from stable `INSTANCE_NAME` / `INSTANCE_SECRET` so the first deploy can be simultaneous.
+- Added bounded Convex function-environment sync from `CONVEX_ENV_*`, deploy-time required env validation, per-CLI/overall deadlines, and runtime secret scrubbing.
+- Pinned Convex backend/dashboard to the same immutable upstream revision and documented backup-first upgrades.
+- Added a GitHub Actions deployment pipeline that validates the app, deploys database -> Convex backend -> dashboard -> frontend, waits for exact Railway deployment IDs and public readiness, maps `main` to Railway `development` and `release` to Railway `production`, and serializes deployments per environment.
 
 ## Current Direction
 
@@ -65,11 +72,12 @@ Use Convex as the application database/backend source of truth. PostgreSQL is on
 
 ## Immediate Next Steps
 
-1. Configure Railway so Convex API traffic reaches port `3210` and Convex HTTP/site auth traffic reaches port `3211`.
-2. Set frontend variables `EXPO_PUBLIC_CONVEX_URL`, `EXPO_PUBLIC_CONVEX_SITE_URL`, `SITE_URL`, `CONVEX_SELF_HOSTED_URL`, and `CONVEX_SELF_HOSTED_ADMIN_KEY`.
-3. Set convex-backend variables `CONVEX_CLOUD_ORIGIN`, `CONVEX_SITE_ORIGIN`, `BETTER_AUTH_SECRET`, `SITE_URL`, and `EXPO_APP_SCHEME=icarun`.
-4. Deploy frontend so `convex deploy` pushes Better Auth component/functions to self-hosted Convex and exports the Expo Web SPA.
-5. Smoke test sign-up, sign-in, sign-out, task CRUD isolation, AI preview/execute, and dynamic route refresh.
+1. Create all four Railway services, select their service-specific config files, attach both required volumes, and disable Railway GitHub source autodeploy.
+2. Choose stable `INSTANCE_NAME` / `INSTANCE_SECRET`, generate the matching admin key offline, and set it as a sealed frontend variable.
+3. Configure public Convex domains, private references, and sealed `CONVEX_ENV_BETTER_AUTH_SECRET` / optional OpenAI sources.
+4. Configure the `development` and `production` GitHub Environments with their Railway Project Tokens, environment/service IDs, and four public health URLs; `main` deploys to development and `release` deploys to production.
+5. Run the GitHub Actions deployment and verify ordered service success, bounded waits, function-env sync, function deploy, and runtime secret scrubbing.
+6. Smoke test sign-up, sign-in, sign-out, task CRUD isolation, AI preview/execute, and dynamic route refresh.
 
 ## Open Decisions
 
@@ -95,4 +103,9 @@ Use Convex as the application database/backend source of truth. PostgreSQL is on
 - Do not reintroduce root package-manager pinning fields without re-validating Railway install logs.
 - Railway PostgreSQL must use `PGDATA=/var/lib/postgresql/data/pgdata`; using the volume mount root directly can fail because of `lost+found`.
 - Convex API Public Networking must target port `3210`; Better Auth also requires a browser-reachable site/auth origin targeting port `3211`.
-- Use Railway public domains for browser-facing Convex URLs and private domains only for backend-to-database traffic.
+- Use Railway public domains for browser-facing Convex URLs; use private domains for backend-to-database and frontend-pre-deploy-to-Convex traffic only.
+- Keep `INSTANCE_NAME`, `INSTANCE_SECRET`, and the derived self-hosted admin key stable and mutually consistent.
+- GitHub Actions is the only push deployment trigger and serializes database -> backend -> dashboard -> frontend; keep Railway GitHub source autodeploy disabled to avoid duplicate unordered deployments.
+- Dependency waits and CLI operations are bounded; Railway does not retry failed pre-deploy, so fix/wait and redeploy frontend after a deadline failure.
+- Railway backend container variables do not populate the Convex function environment; use `CONVEX_ENV_*` synchronization.
+- The four-service topology makes frontend pre-deploy privileged; use a fifth deployer/CI job if stricter isolation is required.

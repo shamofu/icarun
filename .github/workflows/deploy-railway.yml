@@ -1,0 +1,95 @@
+name: Deploy to Railway
+
+on:
+  push:
+    branches:
+      - main
+      - release
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub Environment と Railway のデプロイ先
+        type: environment
+        required: true
+        default: production
+
+permissions:
+  contents: read
+
+concurrency:
+  # main -> development, release -> production, workflow_dispatch -> 選択した環境。
+  # 環境ごとに group を分けて development と production のデプロイを独立させる。
+  group: railway-${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref == 'refs/heads/release' && 'production' || 'development') }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate application
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPO_PUBLIC_CONVEX_URL: https://convex-api.invalid
+      EXPO_PUBLIC_CONVEX_SITE_URL: https://convex-site.invalid
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+  deploy:
+    name: Deploy Railway services
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    environment:
+      name: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref == 'refs/heads/release' && 'production' || 'development') }}
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+      RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+      RAILWAY_DATABASE_SERVICE_ID: ${{ vars.RAILWAY_DATABASE_SERVICE_ID }}
+      RAILWAY_BACKEND_SERVICE_ID: ${{ vars.RAILWAY_BACKEND_SERVICE_ID }}
+      RAILWAY_DASHBOARD_SERVICE_ID: ${{ vars.RAILWAY_DASHBOARD_SERVICE_ID }}
+      RAILWAY_FRONTEND_SERVICE_ID: ${{ vars.RAILWAY_FRONTEND_SERVICE_ID }}
+      CONVEX_API_HEALTH_URL: ${{ vars.CONVEX_API_HEALTH_URL }}
+      CONVEX_SITE_HEALTH_URL: ${{ vars.CONVEX_SITE_HEALTH_URL }}
+      DASHBOARD_HEALTH_URL: ${{ vars.DASHBOARD_HEALTH_URL }}
+      FRONTEND_HEALTH_URL: ${{ vars.FRONTEND_HEALTH_URL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install Railway CLI
+        run: pnpm add --global @railway/cli@5.35.0
+
+      - name: Deploy in dependency order
+        run: node scripts/deploy-railway.mjs

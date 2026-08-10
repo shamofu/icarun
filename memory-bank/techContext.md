@@ -10,7 +10,7 @@ Current local environment has been verified with:
 
 ```txt
 Node 24.18.0
-pnpm 11.13.1
+pnpm 11.17.0
 ```
 
 ## Package Manager
@@ -80,21 +80,28 @@ Docker Compose is intentionally not used.
 
 Railway config-as-code applies to one service, so each service has its own `railway.json`.
 
-Skipped Builds are configured with `build.watchPatterns`. The frontend service watches `/apps/mobile/**` plus root build inputs (`/package.json`, `/pnpm-lock.yaml`, `/pnpm-workspace.yaml`, `/.nvmrc`, `/railway.json`, `/apps/mobile/railway.json`). Dockerfile image-wrapper services watch only their own service directory.
+Skipped Builds are configured with `build.watchPatterns`. The frontend service watches `/apps/mobile/**` plus root build inputs (`/package.json`, `/pnpm-lock.yaml`, `/pnpm-workspace.yaml`, `/.nvmrc`, `/railway.json`, `/apps/mobile/railway.json`). Dockerfile image-wrapper services watch their own directory. Every service also watches `/.gitattributes` because it affects Linux container script line endings.
+
+GitHub Actions is the only push deployment trigger, maps `main` to Railway `development` and `release` to Railway `production`, and orders database -> Convex backend -> dashboard -> frontend by polling exact Railway deployment IDs and public readiness; Railway GitHub source autodeploy must remain disabled. Runtime restarts remain order-independent: backend does bounded PostgreSQL TCP waits (600-second default, 900-second healthcheck), while frontend pre-deploy has a 1200-second overall deadline, 300-second CLI deadlines, synchronizes Convex function environment, and retries up to three times. Timeout requires redeploying the failed service.
 
 ## Environment Variables
 
 Recommended Railway variable wiring:
 
 ```env
-# frontend service
+# frontend service (client + privileged pre-deploy)
 EXPO_PUBLIC_CONVEX_URL=https://<convex-api-public-domain>
 EXPO_PUBLIC_CONVEX_SITE_URL=https://<convex-site-public-domain>
-SITE_URL=https://<frontend-public-domain>
-CONVEX_SELF_HOSTED_URL=https://<convex-api-public-domain>
+CONVEX_SELF_HOSTED_URL=http://${{ convex-backend.RAILWAY_PRIVATE_DOMAIN }}:3210
 CONVEX_SELF_HOSTED_ADMIN_KEY=${{ shared.CONVEX_SELF_HOSTED_ADMIN_KEY }}
+CONVEX_ENV_BETTER_AUTH_SECRET=${{ shared.BETTER_AUTH_SECRET }}
+CONVEX_ENV_SITE_URL=https://<frontend-public-domain>
+CONVEX_ENV_EXPO_APP_SCHEME=icarun
+CONVEX_ENV_OPENAI_API_KEY=${{ shared.OPENAI_API_KEY }}
+CONVEX_ENV_OPENAI_BASE_URL=https://api.openai.com/v1
+CONVEX_ENV_OPENAI_MODEL=gpt-4.1-mini
 
-# convex-backend service
+# convex-backend service (container/runtime only)
 PORT=3210
 INSTANCE_SECRET=replace-with-a-long-random-secret
 INSTANCE_NAME=convex-self-hosted
@@ -103,12 +110,6 @@ DO_NOT_REQUIRE_SSL=1
 CONVEX_CLOUD_ORIGIN=https://<convex-api-public-domain>
 CONVEX_SITE_ORIGIN=https://<convex-site-public-domain>
 CONVEX_SITE_URL=https://<convex-site-public-domain>
-BETTER_AUTH_SECRET=replace-with-long-random-secret
-SITE_URL=https://<frontend-public-domain>
-EXPO_APP_SCHEME=icarun
-OPENAI_API_KEY=sk-your-key
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4.1-mini
 
 # convex-dashboard service
 NEXT_PUBLIC_DEPLOYMENT_URL=https://<convex-api-public-domain>
@@ -120,7 +121,7 @@ POSTGRES_DB=convex_self_hosted
 PGDATA=/var/lib/postgresql/data/pgdata
 ```
 
-Public Railway domains are required for browser-facing Convex URLs. Convex API origin must route to port `3210`; Convex site/auth origin must route to port `3211`. Railway private domains are used only for `convex-backend` -> `database` traffic.
+Public Railway domains are required for browser-facing Convex URLs. Convex API origin must route to port `3210`; Convex site/auth origin must route to port `3211`. Railway private domains are used for `convex-backend` -> `database` and frontend-pre-deploy -> `convex-backend` traffic only.
 
 `/version` on the Convex API origin may return `unknown`; HTTP 200 and Railway healthy status are the success criteria.
 
@@ -149,9 +150,10 @@ POSTGRES_PASSWORD
     "build": "pnpm --filter @icarun/mobile build",
     "typecheck": "pnpm -r typecheck",
     "railway:build": "pnpm run railway:build:frontend",
-    "railway:build:frontend": "pnpm --filter @icarun/mobile convex:deploy",
+    "railway:build:frontend": "pnpm --filter @icarun/mobile build",
+    "railway:deploy:frontend": "pnpm --filter @icarun/mobile railway:deploy",
     "railway:start": "pnpm run railway:start:frontend",
-    "railway:start:frontend": "serve apps/mobile/dist --single",
+    "railway:start:frontend": "node apps/mobile/scripts/start-frontend.mjs",
     "start": "pnpm run railway:start:frontend"
   }
 }
@@ -166,8 +168,9 @@ POSTGRES_PASSWORD
     "web": "expo start --web",
     "build": "expo export --platform web --output-dir dist",
     "convex:dev": "convex dev",
-    "convex:deploy": "convex deploy --cmd-url-env-var-name EXPO_PUBLIC_CONVEX_URL --cmd \"expo export --platform web --output-dir dist\"",
-    "typecheck": "tsc --noEmit"
+    "convex:deploy": "convex deploy",
+    "typecheck": "tsc --noEmit",
+    "railway:deploy": "node scripts/deploy-convex-with-retry.mjs"
   }
 }
 ```
@@ -176,7 +179,7 @@ POSTGRES_PASSWORD
 
 `pnpm --filter @icarun/mobile convex:dev` configures a deployment, pushes functions, and regenerates `convex/_generated`.
 
-For self-hosted production deploy, set `CONVEX_SELF_HOSTED_URL` and `CONVEX_SELF_HOSTED_ADMIN_KEY` on the Railway frontend service, then run `pnpm run railway:build:frontend`.
+For self-hosted production, the privileged Railway frontend service holds the private Convex URL/admin key plus `CONVEX_ENV_*` sources. Build exports Expo; pre-deploy synchronizes function environment and deploys functions; start scrubs deploy credentials before serving. Generate the admin key from the same stable instance credentials before the first simultaneous deploy. Backend/dashboard images are pinned to upstream revision `19431ea0dd90bc55ae58dbbd06d9aa045f97336f` and must be upgraded together after backup/migration review.
 
 Generated files under `apps/mobile/convex/_generated/` should be committed.
 
