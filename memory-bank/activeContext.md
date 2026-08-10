@@ -55,7 +55,7 @@ services/database/
 - Documented offline admin-key generation from stable `INSTANCE_NAME` / `INSTANCE_SECRET` so the first deploy can be simultaneous.
 - Added bounded Convex function-environment sync from `CONVEX_ENV_*`, deploy-time required env validation, per-CLI/overall deadlines, and runtime secret scrubbing.
 - Pinned Convex backend/dashboard to the same immutable upstream revision and documented backup-first upgrades.
-- Added a GitHub Actions deployment pipeline that validates the app, deploys database -> Convex backend -> dashboard -> frontend, waits for exact Railway deployment IDs and public readiness, maps `main` to Railway `development` and `release` to Railway `production`, and serializes deployments per environment.
+- Added a GitHub Actions deployment pipeline that validates the app, deploys database -> Convex backend -> dashboard -> frontend, waits for exact Railway deployment IDs and public readiness, maps `main` to GitHub Environment `Railway / development` and `release` to `Railway / production`, and serializes deployments per environment.
 
 ## Current Direction
 
@@ -75,7 +75,7 @@ Use Convex as the application database/backend source of truth. PostgreSQL is on
 1. Create all four Railway services, select their service-specific config files, attach both required volumes, and disable Railway GitHub source autodeploy.
 2. Choose stable `INSTANCE_NAME` / `INSTANCE_SECRET`, generate the matching admin key offline, and set it as a sealed frontend variable.
 3. Configure public Convex domains, private references, and sealed `CONVEX_ENV_BETTER_AUTH_SECRET` / optional OpenAI sources.
-4. Configure the `development` and `production` GitHub Environments with their Railway Project Tokens, environment/service IDs, and four public health URLs; `main` deploys to development and `release` deploys to production.
+4. Configure the `Railway / development` and `Railway / production` GitHub Environments with their Railway Project Tokens, environment/service IDs, and four public health URLs; `main` deploys to development and `release` deploys to production.
 5. Run the GitHub Actions deployment and verify ordered service success, bounded waits, function-env sync, function deploy, and runtime secret scrubbing.
 6. Smoke test sign-up, sign-in, sign-out, task CRUD isolation, AI preview/execute, and dynamic route refresh.
 

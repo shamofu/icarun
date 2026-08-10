@@ -374,14 +374,17 @@ services, domains, and secrets, so create a matching GitHub Environment per
 Railway environment:
 
 ```txt
-push to main     -> GitHub Environment "development" -> Railway development
-push to release  -> GitHub Environment "production"  -> Railway production
+push to main      -> GitHub Environment "Railway / development" -> Railway development
+push to release   -> GitHub Environment "Railway / production"  -> Railway production
 workflow_dispatch -> the Environment selected in the run input
 ```
 
-Create both GitHub Environments (`development` and `production`). Configure the
-same secret and variables in each, but with values scoped to that Railway
-environment (its own Project Token, environment ID, service IDs, and public
+Create both GitHub Environments (`Railway / development` and
+`Railway / production`) with those names, including the spaces and slash; use the
+shown casing consistently even though GitHub compares Environment names without
+case sensitivity. Configure the same secret and variables in each, but with values
+scoped to that Railway environment (its own Project Token, environment ID,
+service IDs, and public
 health URLs).
 
 Add this Environment secret to each Environment:
@@ -426,8 +429,8 @@ runtime readiness. Failed and timed-out deployments stop the chain and print a
 bounded tail of build/deploy logs. GitHub concurrency is serialized per target
 Environment with `cancel-in-progress: false`, because canceling an Actions run
 does not necessarily cancel a Railway deployment already in progress. Because the
-concurrency group includes the environment name, a `development` deploy and a
-`production` deploy never block or cancel each other.
+concurrency group includes the environment name, a `Railway / development`
+deploy and a `Railway / production` deploy never block or cancel each other.
 
 Both the backend and frontend still retain bounded dependency waits. This
 protects manual Railway redeploys and restarts in addition to the CI ordering.

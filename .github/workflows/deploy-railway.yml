@@ -11,15 +11,15 @@ on:
         description: GitHub Environment と Railway のデプロイ先
         type: environment
         required: true
-        default: production
+        default: Railway / production
 
 permissions:
   contents: read
 
 concurrency:
-  # main -> development, release -> production, workflow_dispatch -> 選択した環境。
-  # 環境ごとに group を分けて development と production のデプロイを独立させる。
-  group: railway-${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref == 'refs/heads/release' && 'production' || 'development') }}
+  # main -> Railway / development、release -> Railway / production。
+  # GitHub Environment名をgroupに含め、両環境のデプロイを独立させる。
+  group: railway-${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref == 'refs/heads/release' && 'Railway / production' || 'Railway / development') }}
   cancel-in-progress: false
 
 jobs:
@@ -60,7 +60,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     environment:
-      name: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref == 'refs/heads/release' && 'production' || 'development') }}
+      name: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref == 'refs/heads/release' && 'Railway / production' || 'Railway / development') }}
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}

@@ -54,7 +54,7 @@
 - Pre-deploy now synchronizes required Convex function variables over stdin, enforces overall/per-CLI deadlines, and strips deploy secrets before SPA serving.
 - Convex backend/dashboard images are pinned to the same immutable revision.
 - GitHub Actions now validates the app and deploys database -> Convex backend -> dashboard -> frontend, polling exact Railway deployment IDs and public readiness before advancing.
-- Actions maps `main` to Railway `development` and `release` to Railway `production`; runs are serialized per environment without canceling in-flight Railway deployments, and required Railway/GitHub Environment configuration is validated before upload.
+- Actions maps `main` to GitHub Environment `Railway / development` and `release` to `Railway / production`; runs are serialized per environment without canceling in-flight Railway deployments, and required Railway/GitHub Environment configuration is validated before upload.
 
 ## Not Started / Remaining
 
@@ -65,7 +65,7 @@
 - Expose Convex HTTP actions/site origin on port `3211` for Better Auth.
 - Generate the self-hosted Convex admin key offline from the production `INSTANCE_NAME` / `INSTANCE_SECRET`, then store it as a sealed Railway variable.
 - Configure frontend public URLs, Convex deploy credentials, required `CONVEX_ENV_BETTER_AUTH_SECRET` / `CONVEX_ENV_SITE_URL`, and optional OpenAI sources.
-- Disable Railway GitHub source autodeploy and configure the GitHub `development` / `production` Environments with their Railway IDs, Project Tokens, and health URLs.
+- Disable Railway GitHub source autodeploy and configure the GitHub `Railway / development` / `Railway / production` Environments with their Railway IDs, Project Tokens, and health URLs.
 - Full browser UI smoke test after the GitHub Actions Railway deployment.
 - Real AI preview call after synchronizing `CONVEX_ENV_OPENAI_API_KEY`.
 - Rate limiting / quotas.
