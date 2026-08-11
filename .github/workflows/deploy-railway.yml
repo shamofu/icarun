@@ -17,8 +17,6 @@ permissions:
   contents: read
 
 concurrency:
-  # main -> Railway / development、release -> Railway / production。
-  # GitHub Environment名をgroupに含め、両環境のデプロイを独立させる。
   group: railway-${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref == 'refs/heads/release' && 'Railway / production' || 'Railway / development') }}
   cancel-in-progress: false
 
@@ -89,7 +87,11 @@ jobs:
           cache: pnpm
 
       - name: Install Railway CLI
-        run: pnpm add --global @railway/cli@5.35.0
+        shell: bash
+        run: |
+          curl -fsSL https://railway.com/install.sh | sh -s -- --yes
+          echo "$HOME/.railway/bin" >> "$GITHUB_PATH"
+          "$HOME/.railway/bin/railway" --version
 
       - name: Deploy in dependency order
         run: node scripts/deploy-railway.mjs
