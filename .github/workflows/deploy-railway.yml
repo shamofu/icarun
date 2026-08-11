@@ -8,7 +8,6 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: GitHub Environment と Railway のデプロイ先
         type: environment
         required: true
         default: Railway / production
@@ -35,7 +34,7 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10.18.3
+          version: 11.21.0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -56,6 +55,7 @@ jobs:
     name: Deploy Railway services
     needs: validate
     runs-on: ubuntu-latest
+    container: ghcr.io/railwayapp/cli:5.37.2
     timeout-minutes: 180
     environment:
       name: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref == 'refs/heads/release' && 'Railway / production' || 'Railway / development') }}
@@ -72,26 +72,27 @@ jobs:
       DASHBOARD_HEALTH_URL: ${{ vars.DASHBOARD_HEALTH_URL }}
       FRONTEND_HEALTH_URL: ${{ vars.FRONTEND_HEALTH_URL }}
     steps:
+      - name: Install deployment dependencies
+        run: apk add --no-cache git nodejs
+
       - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.18.3
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-
-      - name: Install Railway CLI
-        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY_URL: ${{ github.server_url }}/${{ github.repository }}.git
         run: |
-          curl -fsSL https://railway.com/install.sh | sh -s -- --yes
-          echo "$HOME/.railway/bin" >> "$GITHUB_PATH"
-          "$HOME/.railway/bin/railway" --version
+          auth_header="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git init "$GITHUB_WORKSPACE"
+          cd "$GITHUB_WORKSPACE"
+          git remote add origin "$REPOSITORY_URL"
+          git -c http.extraheader="AUTHORIZATION: basic $auth_header" fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+          unset auth_header
+
+      - name: Verify deployment tools
+        run: |
+          railway --version
+          node --version
 
       - name: Deploy in dependency order
         run: node scripts/deploy-railway.mjs

@@ -409,8 +409,12 @@ DASHBOARD_HEALTH_URL        # https://<dashboard-domain>/
 FRONTEND_HEALTH_URL         # https://<frontend-domain>/
 ```
 
-`.github/workflows/deploy-railway.yml` runs typecheck/build first, then
-`scripts/deploy-railway.mjs` uploads and waits for each service in this order:
+`.github/workflows/deploy-railway.yml` runs typecheck/build first, then runs the
+deploy job in the version-pinned `ghcr.io/railwayapp/cli` container. Because the
+official image contains the Railway binary but not Node.js or Git, the job installs
+those two Alpine packages, uses the workflow token to check out the exact workflow
+commit (including private repositories), and then runs `scripts/deploy-railway.mjs`
+to upload and wait for each service in this order:
 
 ```txt
 database deployment succeeds

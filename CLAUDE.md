@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 常時適用する制約
 
-- Node.js 22.x と pnpm 9 以上 12 未満を使用する。npm / yarn は使わない。
+- Node.js 24.x と pnpm 11.x を使用する。npm / yarn は使わない。
 - Railway 互換性のため、ルート `package.json` に `packageManager` や pnpm 11 の `devEngines.packageManager` を再追加しない。
 - lint / test / 単一テストのプロジェクト用コマンドは未定義。依存パッケージ内のテストをプロジェクトテストとして扱わない。
 - 通常の変更後は `pnpm typecheck` と `pnpm build` を実行する。Convex schema、関数、auth component 設定を変更した場合は `pnpm convex:dev` も実行し、`apps/mobile/convex/_generated/` を再生成する。

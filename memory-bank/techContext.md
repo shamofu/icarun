@@ -4,13 +4,13 @@
 
 Use Node.js for local tooling and Expo/Convex development.
 
-Railway frontend builds use Railpack (`build.builder: "RAILPACK"`) with Node.js 22 LTS pinned by `engines.node: 22.x` and `.nvmrc: 22`. The root `package.json` intentionally omits both the legacy top-level `packageManager` field and pnpm 11 `devEngines.packageManager` so Railway can use its detected pnpm version and the lockfile stays pnpm-9-readable.
+Railway frontend builds use Railpack (`build.builder: "RAILPACK"`) with Node.js 24 LTS selected by `engines.node: 24.x` and `.nvmrc: 24`, and the latest pnpm 11 selected by `engines.pnpm: 11.x`. The root `package.json` intentionally omits both the legacy top-level `packageManager` field and pnpm 11 `devEngines.packageManager` so Railway avoids the Corepack path while the lockfile stays pnpm-9-readable.
 
-Current local environment has been verified with:
+The project runtime baseline is:
 
 ```txt
-Node 24.18.0
-pnpm 11.17.0
+Node 24.x
+pnpm 11.x
 ```
 
 ## Package Manager
@@ -82,7 +82,7 @@ Railway config-as-code applies to one service, so each service has its own `rail
 
 Skipped Builds are configured with `build.watchPatterns`. The frontend service watches `/apps/mobile/**` plus root build inputs (`/package.json`, `/pnpm-lock.yaml`, `/pnpm-workspace.yaml`, `/.nvmrc`, `/railway.json`, `/apps/mobile/railway.json`). Dockerfile image-wrapper services watch their own directory. Every service also watches `/.gitattributes` because it affects Linux container script line endings.
 
-GitHub Actions is the only push deployment trigger, maps `main` to GitHub Environment `Railway / development` and `release` to `Railway / production`, and orders database -> Convex backend -> dashboard -> frontend by polling exact Railway deployment IDs and public readiness; Railway GitHub source autodeploy must remain disabled. Runtime restarts remain order-independent: backend does bounded PostgreSQL TCP waits (600-second default, 900-second healthcheck), while frontend pre-deploy has a 1200-second overall deadline, 300-second CLI deadlines, synchronizes Convex function environment, and retries up to three times. Timeout requires redeploying the failed service.
+GitHub Actions is the only push deployment trigger, maps `main` to GitHub Environment `Railway / development` and `release` to `Railway / production`, and orders database -> Convex backend -> dashboard -> frontend by polling exact Railway deployment IDs and public readiness. The deploy job runs in the version-pinned official `ghcr.io/railwayapp/cli` container, installs Node.js and Git into that Alpine container, and checks out the exact workflow commit before invoking `scripts/deploy-railway.mjs`; Railway GitHub source autodeploy must remain disabled. Runtime restarts remain order-independent: backend does bounded PostgreSQL TCP waits (600-second default, 900-second healthcheck), while frontend pre-deploy has a 1200-second overall deadline, 300-second CLI deadlines, synchronizes Convex function environment, and retries up to three times. Timeout requires redeploying the failed service.
 
 ## Environment Variables
 

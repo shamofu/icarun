@@ -36,7 +36,8 @@ services/database/
 - Updated mobile dependencies to Expo SDK 57-compatible versions.
 - Verified updated dependencies with Expo dependency check, peer check, typecheck, and web build.
 - Added Railway config-as-code for frontend SPA hosting.
-- Pinned Railway frontend Node runtime to Node.js 22 LTS.
+- Pinned Railway frontend Node runtime to Node.js 24 LTS.
+- Selected pnpm 11.x for local and Railway frontend package management, while CI validation uses pnpm 11.21.0.
 - Removed root top-level `packageManager` and pnpm 11 `devEngines.packageManager` for Railway pnpm compatibility.
 - Added `services/*` to the pnpm workspace.
 - Added service wrapper packages for self-hosted Convex backend, Convex dashboard, and PostgreSQL.
@@ -55,7 +56,7 @@ services/database/
 - Documented offline admin-key generation from stable `INSTANCE_NAME` / `INSTANCE_SECRET` so the first deploy can be simultaneous.
 - Added bounded Convex function-environment sync from `CONVEX_ENV_*`, deploy-time required env validation, per-CLI/overall deadlines, and runtime secret scrubbing.
 - Pinned Convex backend/dashboard to the same immutable upstream revision and documented backup-first upgrades.
-- Added a GitHub Actions deployment pipeline that validates the app, deploys database -> Convex backend -> dashboard -> frontend, waits for exact Railway deployment IDs and public readiness, maps `main` to GitHub Environment `Railway / development` and `release` to `Railway / production`, and serializes deployments per environment.
+- Added a GitHub Actions deployment pipeline that validates the app, runs deployment in the version-pinned official Railway CLI container, deploys database -> Convex backend -> dashboard -> frontend, waits for exact Railway deployment IDs and public readiness, maps `main` to GitHub Environment `Railway / development` and `release` to `Railway / production`, and serializes deployments per environment.
 
 ## Current Direction
 

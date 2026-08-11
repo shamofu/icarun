@@ -31,7 +31,8 @@
 - Basic Convex function runtime checks performed (`health.check`, task create/list/remove, AI confirmation guard).
 - Mobile dependencies updated to Expo SDK 57-compatible versions.
 - Updated dependency set passes Expo dependency check, peer dependency check, TypeScript typecheck, and Expo Web build.
-- Railway Node runtime pinned to Node.js 22 LTS via `engines.node` and `.nvmrc`.
+- Railway Node runtime pinned to Node.js 24 LTS via `engines.node` and `.nvmrc`.
+- Local and Railway frontend package management selected at pnpm 11.x, while CI validation is pinned to pnpm 11.21.0.
 - Root top-level `packageManager` removed so Railway avoids the Corepack pnpm shim issue.
 - pnpm 11 `devEngines.packageManager` removed and `pnpm-lock.yaml` regenerated as a single YAML document for Railway pnpm 9 compatibility.
 - `services/*` added to `pnpm-workspace.yaml`.
@@ -53,7 +54,7 @@
 - Offline admin-key bootstrapping from stable Convex instance credentials is documented for simultaneous first deploys.
 - Pre-deploy now synchronizes required Convex function variables over stdin, enforces overall/per-CLI deadlines, and strips deploy secrets before SPA serving.
 - Convex backend/dashboard images are pinned to the same immutable revision.
-- GitHub Actions now validates the app and deploys database -> Convex backend -> dashboard -> frontend, polling exact Railway deployment IDs and public readiness before advancing.
+- GitHub Actions now validates the app and uses the version-pinned official Railway CLI container to deploy database -> Convex backend -> dashboard -> frontend, polling exact Railway deployment IDs and public readiness before advancing.
 - Actions maps `main` to GitHub Environment `Railway / development` and `release` to `Railway / production`; runs are serialized per environment without canceling in-flight Railway deployments, and required Railway/GitHub Environment configuration is validated before upload.
 
 ## Not Started / Remaining
@@ -182,8 +183,9 @@ Railway previously had pnpm/Corepack and pnpm-lock parsing issues.
 
 Mitigation:
 
-- keep `engines.node` as `22.x`
-- keep `.nvmrc` as `22`
+- keep `engines.node` as `24.x`
+- keep `.nvmrc` as `24`
+- keep local and Railway `engines.pnpm` on `11.x`; CI validation may pin an exact pnpm 11 release
 - do not re-add root top-level `packageManager`
 - do not re-add pnpm 11 `devEngines.packageManager`
 - keep `pnpm-lock.yaml` as a single YAML document
