@@ -2,7 +2,7 @@ packages:
   - "apps/*"
   - "services/*"
 allowBuilds:
-  esbuild: set this to true or false
+  esbuild: true
 minimumReleaseAgeExclude:
   - '@expo/metro-runtime@57.0.6'
   - '@expo/ui@57.0.7'
